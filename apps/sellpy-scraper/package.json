@@ -1,0 +1,30 @@
+{
+  "name": "sellpy-scraper",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "start": "node dist/apps/sellpy-scraper/src/cli.js",
+    "test": "vitest",
+    "migrate": "tsx src/db/migrate.ts"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.12",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.36.4",
+    "p-limit": "^5.0.0",
+    "pg": "^8.13.1",
+    "pino": "^9.3.1",
+    "playwright": "^1.47.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.4"
+  }
+}
