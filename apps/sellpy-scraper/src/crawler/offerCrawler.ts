@@ -6,7 +6,8 @@ import { normalizeUrl } from "../utils/normalize.js";
 import type { AppConfig } from "../config.js";
 import type { HttpClient } from "../utils/http.js";
 import { logger } from "../utils/logger.js";
-import type { ImageRecord, OfferRecord } from "../db/upsertOffer.js";
+import type { ImageRecord, OfferDetails } from "../db/upsertOffer.js";
+import path from "node:path";
 
 function extractExternalIdFromUrl(url: string): string | undefined {
   const match = url.match(/(\d{6,})/);
@@ -44,13 +45,119 @@ async function fetchOfferHtmlWithPlaywright(
   return content;
 }
 
+async function captureImageScreenshots(
+  config: AppConfig,
+  offerUrl: string,
+  maxCount: number
+): Promise<string[]> {
+  const browser = await chromium.launch({ headless: config.headless });
+  const page = await browser.newPage({ userAgent: config.userAgent });
+  await page.goto(offerUrl, { waitUntil: "networkidle" });
+
+  try {
+    const acceptLabels = [
+      "Accept all",
+      "Accept All",
+      "Accept",
+      "Allow all",
+      "Allow All",
+      "Allow",
+      "Alle akzeptieren",
+      "Alles akzeptieren",
+      "Zustimmen",
+      "Ich stimme zu"
+    ];
+    for (const label of acceptLabels) {
+      const button = page.getByRole("button", { name: label, exact: false });
+      if (await button.first().isVisible().catch(() => false)) {
+        await button.first().click({ timeout: 2000 });
+        break;
+      }
+    }
+  } catch {
+    // Ignore cookie banner errors
+  }
+
+  try {
+    await page.evaluate(() => {
+      const selectors = [
+        "[id*='cookie']",
+        "[class*='cookie']",
+        "[data-testid*='cookie']",
+        "[aria-label*='cookie']"
+      ];
+      for (const selector of selectors) {
+        document.querySelectorAll(selector).forEach((el) => {
+          const element = el as HTMLElement;
+          element.style.display = "none";
+          element.style.visibility = "hidden";
+        });
+      }
+    });
+  } catch {
+    // best effort
+  }
+
+  const handles = await page.$$("img");
+  const results: string[] = [];
+  for (const handle of handles) {
+    if (results.length >= maxCount) break;
+    const box = await handle.boundingBox();
+    if (!box || box.width < 120 || box.height < 120) continue;
+    const buffer = await handle.screenshot({ type: "png" });
+    results.push(`data:image/png;base64,${buffer.toString("base64")}`);
+  }
+
+  await browser.close();
+  return results;
+}
+
+function inferMime(url: string, contentType?: string | null) {
+  if (contentType) return contentType;
+  const ext = path.extname(url).toLowerCase();
+  if (ext === ".png") return "image/png";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".gif") return "image/gif";
+  return "image/jpeg";
+}
+
+async function fetchImageWithPlaywright(config: AppConfig, url: string) {
+  const browser = await chromium.launch({ headless: config.headless });
+  const context = await browser.newContext({
+    userAgent: config.userAgent,
+    extraHTTPHeaders: {
+      referer: config.baseUrl,
+      accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+    }
+  });
+  const page = await context.newPage();
+  try {
+    await page.goto(config.baseUrl, { waitUntil: "domcontentloaded" });
+  } catch {
+    // ignore base navigation errors
+  }
+  const response = await context.request.get(url);
+  if (!response.ok()) {
+    await browser.close();
+    throw new Error(`Playwright image fetch failed: ${response.status()} ${response.statusText()}`);
+  }
+  const buffer = await response.body();
+  const contentType = response.headers()["content-type"];
+  await browser.close();
+  return { buffer, contentType };
+}
+
+async function fetchImageData(): Promise<{ dataUrl: string; mime: string } | null> {
+  return null;
+}
+
 export async function crawlOffer(
   http: HttpClient,
   config: AppConfig,
   searchTerm: string,
   url: string,
   nativeExternalId?: string
-): Promise<{ offer: OfferRecord; images: ImageRecord[] }> {
+): Promise<{ offer: OfferDetails; images: ImageRecord[] }> {
   let html = await fetchOfferHtml(http, url);
   let details = extractOfferDetails(html);
 
@@ -65,10 +172,34 @@ export async function crawlOffer(
   }
 
   const imagesFromHtml = extractImagesFromHtml(html);
-  const images = (details.imageUrls ?? imagesFromHtml).map((imageUrl, index) => ({
-    position: index,
-    imageUrl
-  }));
+  const imageUrls = details.imageUrls ?? imagesFromHtml;
+  const images = await Promise.all(
+    imageUrls.map(async (imageUrl, index) => {
+      const downloaded = await fetchImageData();
+      return {
+        position: index,
+        imageUrl,
+        imageData: downloaded?.dataUrl ?? null,
+        imageMime: downloaded?.mime ?? null
+      };
+    })
+  );
+
+  if (config.usePlaywright !== "never") {
+    try {
+      const screenshots = await captureImageScreenshots(config, url, images.length);
+      let cursor = 0;
+      for (const img of images) {
+        if (cursor < screenshots.length) {
+          img.imageData = screenshots[cursor];
+          img.imageMime = "image/png";
+          cursor += 1;
+        }
+      }
+    } catch (error) {
+      logger.warn({ url, error }, "Failed to capture image screenshots");
+    }
+  }
 
   const urlId = extractExternalIdFromUrl(url);
   const externalId =
@@ -83,7 +214,7 @@ export async function crawlOffer(
     : parsedPrice.amount ?? null;
   const priceCurrency = details.priceCurrency ?? parsedPrice.currency ?? null;
 
-  const offer: OfferRecord = {
+  const offer: OfferDetails = {
     source: "sellpy",
     externalId,
     searchTerm,

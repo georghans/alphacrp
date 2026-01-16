@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { readFile } from "fs/promises";
 import { loadConfig } from "./config.js";
 import { pool } from "./db/client.js";
-import { createStyleProfile } from "./styles/profiles.js";
+import { createSearch } from "./searches.js";
 import { styleProfileInputSchema } from "./evaluator/schemas.js";
 import { OpenRouterClient } from "./evaluator/openrouterClient.js";
 import { runEvaluation } from "./queue/worker.js";
@@ -12,13 +12,14 @@ const program = new Command();
 
 program
   .name("style-scoring-bot")
-  .description("Evaluate Sellpy offers against style profiles using Gemini via OpenRouter")
+  .description("Evaluate Sellpy offers against searches using Gemini via OpenRouter")
   .version("0.1.0");
 
 program
-  .command("create-profile")
-  .requiredOption("--name <name>", "Profile name")
-  .requiredOption("--prompt <prompt>", "Style prompt")
+  .command("create-search")
+  .alias("create-profile")
+  .requiredOption("--name <name>", "Search name")
+  .requiredOption("--prompt <prompt>", "Search prompt")
   .requiredOption("--examples <file>", "Path to JSON array of example image URLs or file paths")
   .action(async (options) => {
     try {
@@ -30,8 +31,8 @@ program
         example_images: exampleImages
       });
 
-      const profile = await createStyleProfile(input);
-      logger.info({ profileId: profile.id }, "Created style profile");
+      const search = await createSearch(input);
+      logger.info({ searchId: search.id }, "Created search");
     } catch (error) {
       logger.error({ error }, "Failed to create style profile");
       process.exitCode = 1;
@@ -42,12 +43,13 @@ program
 
 program
   .command("eval")
-  .requiredOption("--profile <id>", "Style profile ID")
+  .requiredOption("--search <id>", "Search ID")
   .option("--batch-size <n>", "Batch size", "50")
   .option("--concurrency <n>", "Concurrency", "5")
   .option("--min-score <n>", "Minimum score to match", "0.7")
   .option("--strictness <level>", "low | medium | high", "medium")
   .option("--offer-id <id>", "Single offer ID")
+  .option("--max-offers <n>", "Maximum offers to evaluate", "0")
   .option("--force", "Re-evaluate offers even if already decided", false)
   .option("--dry-run", "Do not write results", false)
   .action(async (options) => {
@@ -60,14 +62,15 @@ program
 
     try {
       await runEvaluation(client, {
-        styleProfileId: options.profile,
+        searchId: options.search,
         batchSize: Number(options.batchSize),
         concurrency: Number(options.concurrency),
         minScoreToMatch: Number(options.minScore),
         strictness,
         dryRun: Boolean(options.dryRun),
         force: Boolean(options.force),
-        offerId: options.offerId
+        offerId: options.offerId,
+        maxOffers: Number(options.maxOffers) > 0 ? Number(options.maxOffers) : undefined
       });
     } catch (error) {
       logger.error({ error }, "Evaluation run failed");

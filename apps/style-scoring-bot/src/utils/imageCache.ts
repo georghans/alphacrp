@@ -47,7 +47,17 @@ export async function downloadImage(
     // cache miss
   }
 
-  const response = await fetch(url);
+  const headers: Record<string, string> = {
+    "user-agent":
+      process.env.USER_AGENT ??
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"
+  };
+  if (process.env.SELLPY_BASE_URL) {
+    headers.referer = process.env.SELLPY_BASE_URL;
+  }
+
+  const response = await fetch(url, { headers });
   if (!response.ok) {
     throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
   }

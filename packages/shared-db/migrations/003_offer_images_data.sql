@@ -1,0 +1,2 @@
+ALTER TABLE offer_images ADD COLUMN IF NOT EXISTS image_data BYTEA;
+ALTER TABLE offer_images ADD COLUMN IF NOT EXISTS image_mime TEXT;

@@ -1,0 +1,18 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: sellpy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sellpy
+      POSTGRES_PASSWORD: sellpy
+      POSTGRES_DB: sellpy
+    ports:
+      - "5432:5432"
+    volumes:
+      - sellpy_pg_data:/var/lib/postgresql/data
+
+volumes:
+  sellpy_pg_data:

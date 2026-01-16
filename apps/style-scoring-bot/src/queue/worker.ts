@@ -1,13 +1,13 @@
 import pLimit from "p-limit";
-import { fetchOfferById, fetchOffersForProfile } from "../db/offers.js";
+import { fetchOfferById, fetchOffersForSearch } from "../db/offers.js";
 import { upsertEvaluation } from "../db/evaluations.js";
 import { OpenRouterClient } from "../evaluator/openrouterClient.js";
 import { evaluateOffer } from "../evaluator/evaluateOffer.js";
-import { getStyleProfile } from "../styles/profiles.js";
+import { getSearch } from "../searches.js";
 import { logger } from "../utils/logger.js";
 
 export type EvaluationOptions = {
-  styleProfileId: string;
+  searchId: string;
   batchSize: number;
   concurrency: number;
   minScoreToMatch: number;
@@ -15,10 +15,30 @@ export type EvaluationOptions = {
   dryRun: boolean;
   force: boolean;
   offerId?: string;
+  maxOffers?: number;
 };
 
-function mapImages(images: { imageUrl: string; imageUrlFull: string | null; imageUrlThumb: string | null }[]) {
-  return images.map((image) => image.imageUrlFull ?? image.imageUrl ?? image.imageUrlThumb ?? "").filter(Boolean);
+function mapImages(
+  images: {
+    imageUrl: string;
+    imageUrlFull: string | null;
+    imageUrlThumb: string | null;
+    imageData?: string | null;
+    imageMime?: string | null;
+  }[]
+) {
+  return images
+    .map((image) => {
+      if (image.imageData && image.imageData.length > 0) {
+        if (image.imageData.startsWith("data:")) {
+          return image.imageData;
+        }
+        const contentType = image.imageMime ?? "image/jpeg";
+        return `data:${contentType};base64,${image.imageData}`;
+      }
+      return image.imageUrlFull ?? image.imageUrl ?? image.imageUrlThumb ?? "";
+    })
+    .filter(Boolean);
 }
 
 function toOfferInput(offer: Awaited<ReturnType<typeof fetchOfferById>>) {
@@ -41,22 +61,23 @@ function toOfferInput(offer: Awaited<ReturnType<typeof fetchOfferById>>) {
 }
 
 export async function runEvaluation(client: OpenRouterClient, options: EvaluationOptions) {
-  const profile = await getStyleProfile(options.styleProfileId);
+  const search = await getSearch(options.searchId);
 
-  if (!profile) {
-    throw new Error(`Style profile not found: ${options.styleProfileId}`);
+  if (!search) {
+    throw new Error(`Search not found: ${options.searchId}`);
   }
 
   const profileInput = {
-    id: profile.id,
-    stylePrompt: profile.stylePrompt,
-    exampleImages: Array.isArray(profile.exampleImages) ? profile.exampleImages : []
+    id: search.id,
+    stylePrompt: search.searchPrompt,
+    exampleImages: Array.isArray(search.exampleImages) ? search.exampleImages : []
   };
 
   const limit = pLimit(options.concurrency);
   let processed = 0;
   let matches = 0;
   let failures = 0;
+  let handled = 0;
 
   const handleOffer = async (offerRecord: Awaited<ReturnType<typeof fetchOfferById>>) => {
     const offer = toOfferInput(offerRecord);
@@ -80,10 +101,10 @@ export async function runEvaluation(client: OpenRouterClient, options: Evaluatio
       if (!options.dryRun) {
         await upsertEvaluation({
           offerId: offer.id,
-          styleProfileId: profile.id,
+          searchId: search.id,
           decision,
           styleScore: result.style_score,
-          confidence: result.confidence,
+            confidence: result.confidence,
           matchReasons: result.match_reasons,
           mismatchReasons: result.mismatch_reasons,
           tags: result.tags,
@@ -94,7 +115,48 @@ export async function runEvaluation(client: OpenRouterClient, options: Evaluatio
       }
     } catch (error) {
       failures += 1;
-      logger.error({ offerId: offer.id, error }, "Failed to evaluate offer");
+      const err = error as { message?: string; stack?: string };
+      logger.error(
+        {
+          offerId: offer.id,
+          errorMessage: err?.message,
+          errorStack: err?.stack
+        },
+        "Failed to evaluate offer"
+      );
+
+      if (!options.dryRun) {
+        try {
+          await upsertEvaluation({
+            offerId: offer.id,
+            searchId: search.id,
+            decision: "ERROR",
+            styleScore: null,
+            confidence: null,
+            matchReasons: [],
+            mismatchReasons: [],
+            tags: [],
+            rawModelOutput: {
+              error: err?.message ?? String(error),
+              stack: err?.stack ?? null
+            },
+            modelName: "error",
+            modelVersion: null
+          });
+        } catch (writeError) {
+          const writeErr = writeError as { message?: string; stack?: string };
+          logger.error(
+            {
+              offerId: offer.id,
+              errorMessage: writeErr?.message,
+              errorStack: writeErr?.stack
+            },
+            "Failed to record evaluation error"
+          );
+        }
+      }
+    } finally {
+      handled += 1;
     }
   };
 
@@ -103,15 +165,19 @@ export async function runEvaluation(client: OpenRouterClient, options: Evaluatio
     await handleOffer(offer);
   } else {
     while (true) {
-      const offers = await fetchOffersForProfile(
-        options.styleProfileId,
+      if (options.maxOffers && handled >= options.maxOffers) break;
+      const offers = await fetchOffersForSearch(
+        options.searchId,
         options.batchSize,
         options.force
       );
       if (offers.length === 0) break;
-      await Promise.all(offers.map((offer) => limit(() => handleOffer(offer))));
+      const remaining = options.maxOffers ? options.maxOffers - handled : undefined;
+      const batch = remaining ? offers.slice(0, Math.max(remaining, 0)) : offers;
+      if (batch.length === 0) break;
+      await Promise.all(batch.map((offer) => limit(() => handleOffer(offer))));
     }
   }
 
-  logger.info({ processed, matches, failures }, "Evaluation summary");
+  logger.info({ processed, matches, failures, handled }, "Evaluation summary");
 }

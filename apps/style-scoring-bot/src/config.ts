@@ -24,7 +24,15 @@ const envSchema = z.object({
   OPENROUTER_TITLE: z.string().optional(),
   IMAGE_MAX_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
   IMAGE_CACHE_DIR: z.string().default(".image-cache"),
-  FORCE_BASE64_IMAGES: z.coerce.boolean().default(false)
+  FORCE_BASE64_IMAGES: z
+    .preprocess(
+      (value) => {
+        if (value === "true" || value === true) return true;
+        if (value === "false" || value === false) return false;
+        return value;
+      },
+      z.boolean().default(false)
+    )
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

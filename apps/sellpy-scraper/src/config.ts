@@ -30,7 +30,8 @@ const envSchema = z.object({
   SELLPY_SEARCH_QUERY_PARAM: z.string().optional().default("query"),
   SELLPY_PAGE_PARAM: z.string().optional().default("page"),
   SELLPY_LOCALE: z.string().optional().default("en"),
-  SELLPY_USE_PLAYWRIGHT: z.string().optional().default("auto")
+  SELLPY_USE_PLAYWRIGHT: z.string().optional().default("auto"),
+  IMAGE_MAX_BYTES: z.string().optional().default(String(5 * 1024 * 1024))
 });
 
 export type AppConfig = {
@@ -47,6 +48,7 @@ export type AppConfig = {
   pageParam: string;
   locale: string;
   usePlaywright: "auto" | "always" | "never";
+  imageMaxBytes: number;
 };
 
 export function loadConfig(): AppConfig {
@@ -74,6 +76,7 @@ export function loadConfig(): AppConfig {
         ? "always"
         : env.SELLPY_USE_PLAYWRIGHT === "never"
           ? "never"
-          : "auto"
+          : "auto",
+    imageMaxBytes: Number(env.IMAGE_MAX_BYTES)
   };
 }

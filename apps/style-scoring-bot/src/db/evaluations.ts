@@ -1,9 +1,11 @@
 import { db } from "./client.js";
-import { offerStyleEvaluations } from "../../../packages/shared-db/src/schema.js";
+import * as schema from "../../../../packages/shared-db/src/schema.ts";
+
+const { offerSearchEvaluations } = schema;
 
 export type EvaluationInsert = {
   offerId: string;
-  styleProfileId: string;
+  searchId: string;
   decision: "MATCH" | "NO_MATCH";
   styleScore: number | null;
   confidence: number | null;
@@ -17,10 +19,10 @@ export type EvaluationInsert = {
 
 export async function upsertEvaluation(payload: EvaluationInsert) {
   return db
-    .insert(offerStyleEvaluations)
+    .insert(offerSearchEvaluations)
     .values({
       offerId: payload.offerId,
-      styleProfileId: payload.styleProfileId,
+      searchId: payload.searchId,
       decision: payload.decision,
       styleScore: payload.styleScore,
       confidence: payload.confidence,
@@ -32,7 +34,7 @@ export async function upsertEvaluation(payload: EvaluationInsert) {
       modelVersion: payload.modelVersion
     })
     .onConflictDoUpdate({
-      target: [offerStyleEvaluations.offerId, offerStyleEvaluations.styleProfileId],
+      target: [offerSearchEvaluations.offerId, offerSearchEvaluations.searchId],
       set: {
         decision: payload.decision,
         styleScore: payload.styleScore,

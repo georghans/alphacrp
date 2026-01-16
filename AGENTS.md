@@ -1,10 +1,53 @@
 # AGENTS.md
 
-## Overview
-This repo contains two TypeScript/Node.js apps plus a shared DB package:
-- `apps/sellpy-scraper`: crawls Sellpy search results and offer pages, extracting structured offer data and image URLs.
-- `apps/style-scoring-bot`: evaluates stored offers against style profiles using OpenRouter (Gemini 3 Flash) and persists scoring decisions.
-- `packages/shared-db`: shared Drizzle schema + migrations + Postgres client used by both apps.
+## Project Purpose
+Automate Sellpy item discovery and matching. The system scrapes Sellpy offers, stores them in Postgres, and evaluates offers against search prompts + example images using OpenRouter, exposing results in a unified Next.js UI.
+
+## Structure
+- `apps/sellpy-web`: Next.js app with login + UI for searches, offers, matches.
+- `apps/sellpy-scraper`: crawls Sellpy search results and offer pages, extracts metadata + images.
+- `apps/style-scoring-bot`: evaluates offers against searches using OpenRouter (Gemini 3 Flash).
+- `packages/shared-db`: shared Drizzle schema + migrations + Postgres client.
+- `docker-compose.yml`: local Postgres setup.
+
+## Architecture (High Level)
+1) **Scrape**: `apps/sellpy-scraper` discovers offers for a search term, extracts metadata + images, and upserts into Postgres with a `search_id`.
+2) **Score**: `apps/style-scoring-bot` reads offers for a search, builds prompts from search prompt + example images, calls OpenRouter, and stores decisions in `offer_search_evaluations`.
+3) **View**: `apps/sellpy-web` reads from Postgres to show searches, all offers, and matched offers.
+
+## Technologies
+- TypeScript, Node.js (ESM)
+- Next.js (App Router)
+- PostgreSQL + Drizzle ORM
+- Playwright (scraping + screenshots)
+- OpenRouter (Gemini 3 Flash)
+- Commander, tsx, Zod, dotenv, pino
+
+## Important Commands
+### Database
+- Start Postgres: `docker start sellpy-postgres`
+- Reset DB (early dev ok): `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`
+- Migrate: `cd apps/sellpy-scraper && npm run migrate`
+
+### Scraper
+- Run: `cd apps/sellpy-scraper && npm run dev -- --term "jacket" --max-items 20 --max-pages 2 --search-id <searchId>`
+
+### Matcher
+- Run (limit offers): `cd apps/style-scoring-bot && npm run dev -- eval --search <searchId> --max-offers 10 --batch-size 5 --concurrency 2`
+
+### Web
+- Dev server: `cd apps/sellpy-web && npm run dev`
+- Worker loop: `cd apps/sellpy-web && npm run worker`
+
+## Development Environment
+- `.env` at repo root provides configuration for all apps.
+- Requires local Postgres (Docker recommended).
+- Playwright Chromium must be installed for scraping.
+- OpenRouter API key + model required for evaluation.
+
+## Development DB Reset
+- During early development it is acceptable to wipe the database before each run.
+- It is also acceptable to wipe the database to apply clean migrations.
 
 ## Architecture (High Level)
 1) **Scrape**: `apps/sellpy-scraper` discovers offers for a search term, extracts metadata + ordered images, and upserts into the shared PostgreSQL database.

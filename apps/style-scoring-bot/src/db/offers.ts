@@ -1,6 +1,8 @@
 import { and, eq, exists, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "./client.js";
-import { offers, offerImages, offerStyleEvaluations } from "../../../packages/shared-db/src/schema.js";
+import * as schema from "../../../../packages/shared-db/src/schema.ts";
+
+const { offers, offerImages, offerSearchEvaluations } = schema;
 
 function mapOfferRows(rows: Array<{ offer: typeof offers.$inferSelect; image: typeof offerImages.$inferSelect }>) {
   const byId = new Map<string, typeof offers.$inferSelect & { images: typeof offerImages.$inferSelect[] }>();
@@ -20,8 +22,8 @@ function mapOfferRows(rows: Array<{ offer: typeof offers.$inferSelect; image: ty
   }));
 }
 
-export async function fetchOffersForProfile(
-  styleProfileId: string,
+export async function fetchOffersForSearch(
+  searchId: string,
   batchSize: number,
   force: boolean
 ) {
@@ -32,9 +34,9 @@ export async function fetchOffersForProfile(
       .where(eq(offerImages.offerId, offers.id))
   );
 
-  const conditions = [isNotNull(offers.title), offersWithImages];
+  const conditions = [isNotNull(offers.title), offersWithImages, eq(offers.searchId, searchId)];
   if (!force) {
-    conditions.push(isNull(offerStyleEvaluations.id));
+    conditions.push(isNull(offerSearchEvaluations.id));
   }
   const baseWhere = and(...conditions);
 
@@ -42,10 +44,10 @@ export async function fetchOffersForProfile(
     .select({ id: offers.id })
     .from(offers)
     .leftJoin(
-      offerStyleEvaluations,
+      offerSearchEvaluations,
       and(
-        eq(offerStyleEvaluations.offerId, offers.id),
-        eq(offerStyleEvaluations.styleProfileId, styleProfileId)
+        eq(offerSearchEvaluations.offerId, offers.id),
+        eq(offerSearchEvaluations.searchId, searchId)
       )
     )
     .where(baseWhere)

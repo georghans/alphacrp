@@ -1,9 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
-import { offers, offerImages } from "../../../packages/shared-db/src/schema.js";
+import * as schema from "../../../../packages/shared-db/src/schema.ts";
+
+const { offers, offerImages } = schema;
 
 export type OfferRecord = {
+  searchId: string;
   source: string;
   externalId: string;
   searchTerm: string;
@@ -24,11 +27,15 @@ export type OfferRecord = {
   rawMetadata: Record<string, unknown>;
 };
 
+export type OfferDetails = Omit<OfferRecord, "searchId">;
+
 export type ImageRecord = {
   position: number;
   imageUrl: string;
   imageUrlFull?: string | null;
   imageUrlThumb?: string | null;
+  imageData?: string | null;
+  imageMime?: string | null;
 };
 
 export async function upsertOffer(
@@ -39,7 +46,13 @@ export async function upsertOffer(
   const existing = await db
     .select({ id: offers.id })
     .from(offers)
-    .where(and(eq(offers.source, offer.source), eq(offers.externalId, offer.externalId)))
+    .where(
+      and(
+        eq(offers.source, offer.source),
+        eq(offers.externalId, offer.externalId),
+        eq(offers.searchId, offer.searchId)
+      )
+    )
     .limit(1);
 
   const offerId = existing[0]?.id ?? randomUUID();
@@ -48,6 +61,7 @@ export async function upsertOffer(
     .insert(offers)
     .values({
       id: offerId,
+      searchId: offer.searchId,
       source: offer.source,
       externalId: offer.externalId,
       searchTerm: offer.searchTerm,
@@ -69,8 +83,9 @@ export async function upsertOffer(
       scrapedAt: new Date()
     })
     .onConflictDoUpdate({
-      target: [offers.source, offers.externalId],
+      target: [offers.source, offers.externalId, offers.searchId],
       set: {
+        searchId: offer.searchId,
         searchTerm: offer.searchTerm,
         url: offer.url,
         title: offer.title ?? null,
@@ -101,6 +116,8 @@ export async function upsertOffer(
         imageUrl: img.imageUrl,
         imageUrlFull: img.imageUrlFull ?? null,
         imageUrlThumb: img.imageUrlThumb ?? null,
+        imageData: img.imageData ?? null,
+        imageMime: img.imageMime ?? null,
         createdAt: new Date()
       }))
     );
