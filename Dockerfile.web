@@ -8,6 +8,7 @@ WORKDIR /app
 COPY --from=deps /app/apps/sellpy-web/node_modules ./apps/sellpy-web/node_modules
 COPY apps/sellpy-web ./apps/sellpy-web
 COPY packages ./packages
+RUN mkdir -p /app/apps/sellpy-web/public
 RUN cd apps/sellpy-web && npm run build
 
 FROM node:20-bookworm AS runner
