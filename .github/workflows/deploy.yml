@@ -106,5 +106,5 @@ jobs:
             MATCHER_CONCURRENCY=5
             EOF
             cd /opt/alphacrp/deploy
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d
+            docker compose --env-file .env.prod -f docker-compose.prod.yml pull
+            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d

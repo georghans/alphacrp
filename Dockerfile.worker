@@ -16,4 +16,4 @@ COPY --from=deps /app/apps/style-scoring-bot/node_modules ./apps/style-scoring-b
 COPY apps ./apps
 COPY packages ./packages
 WORKDIR /app/apps/sellpy-web
-CMD [\"npm\", \"run\", \"worker\"]
+CMD ["npm", "run", "worker"]
