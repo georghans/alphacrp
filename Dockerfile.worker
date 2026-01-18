@@ -1,0 +1,19 @@
+FROM mcr.microsoft.com/playwright:v1.47.0-jammy AS deps
+WORKDIR /app
+COPY apps/sellpy-web/package.json apps/sellpy-web/package-lock.json ./apps/sellpy-web/
+COPY apps/sellpy-scraper/package.json apps/sellpy-scraper/package-lock.json ./apps/sellpy-scraper/
+COPY apps/style-scoring-bot/package.json apps/style-scoring-bot/package-lock.json ./apps/style-scoring-bot/
+RUN cd apps/sellpy-web && npm ci --include=dev
+RUN cd apps/sellpy-scraper && npm ci --include=dev
+RUN cd apps/style-scoring-bot && npm ci --include=dev
+
+FROM mcr.microsoft.com/playwright:v1.47.0-jammy AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=deps /app/apps/sellpy-web/node_modules ./apps/sellpy-web/node_modules
+COPY --from=deps /app/apps/sellpy-scraper/node_modules ./apps/sellpy-scraper/node_modules
+COPY --from=deps /app/apps/style-scoring-bot/node_modules ./apps/style-scoring-bot/node_modules
+COPY apps ./apps
+COPY packages ./packages
+WORKDIR /app/apps/sellpy-web
+CMD [\"npm\", \"run\", \"worker\"]

@@ -1,0 +1,23 @@
+FROM node:20-bookworm AS deps
+WORKDIR /app
+COPY apps/sellpy-web/package.json apps/sellpy-web/package-lock.json ./apps/sellpy-web/
+RUN cd apps/sellpy-web && npm ci
+
+FROM node:20-bookworm AS builder
+WORKDIR /app
+COPY --from=deps /app/apps/sellpy-web/node_modules ./apps/sellpy-web/node_modules
+COPY apps/sellpy-web ./apps/sellpy-web
+COPY packages ./packages
+RUN cd apps/sellpy-web && npm run build
+
+FROM node:20-bookworm AS runner
+WORKDIR /app/apps/sellpy-web
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+COPY --from=builder /app/apps/sellpy-web/.next ./.next
+COPY --from=builder /app/apps/sellpy-web/public ./public
+COPY --from=builder /app/apps/sellpy-web/package.json ./package.json
+COPY --from=builder /app/apps/sellpy-web/next.config.mjs ./next.config.mjs
+COPY --from=builder /app/apps/sellpy-web/node_modules ./node_modules
+EXPOSE 3000
+CMD ["npm", "run", "start", "--", "-H", "0.0.0.0", "-p", "3000"]
