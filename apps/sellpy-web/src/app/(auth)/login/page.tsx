@@ -9,8 +9,6 @@ export default function LoginPage({
 
   return (
     <div className="card" style={{ maxWidth: 420, margin: "12vh auto" }}>
-      <div className="card-title">Enter Gallery</div>
-      <p className="muted">Single-user access</p>
       <form className="form" action={login}>
         <div className="field">
           <label className="label" htmlFor="username">
