@@ -210,5 +210,11 @@ mocks/rio-user-menu.js
 # ignore direnv config
 .envrc
 
+# local env files (keep examples)
+.env
+.env.*
+!.env.example
+!deploy/.env.prod.example
+
 # we don't want to have to commit this updated comment number again and again and AGAIN all the time
 public/mockServiceWorker.js

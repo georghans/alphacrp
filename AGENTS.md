@@ -64,10 +64,18 @@ Automate Sellpy item discovery and matching. The system scrapes Sellpy offers, s
   - SSH/SSL tab sets the local tunnel port (e.g. `55432`) and SSH host.
 
 ## Development Environment
-- `.env` at repo root provides configuration for all apps.
+- Use `.env.example` as a template for local `.env` (never commit `.env`).
 - Requires local Postgres (Docker recommended).
 - Playwright Chromium must be installed for scraping.
 - OpenRouter API key + model required for evaluation.
+
+## Deployment Secrets (GitHub Actions)
+- Secrets required for deploy workflow (never commit to repo):
+  - `SSH_HOST`, `SSH_USER`, `SSH_KEY`, `SSH_KEY_PASSPHRASE`
+  - `DOMAIN`, `LETSENCRYPT_EMAIL`
+  - `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `DATABASE_URL`
+  - `APP_USERNAME`, `APP_PASSWORD`
+  - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `GHCR_USERNAME`, `GHCR_TOKEN` (optional)
 
 ## Development DB Reset
 - During early development it is acceptable to wipe the database before each run.

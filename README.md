@@ -8,7 +8,7 @@ This repo powers Sellpy offer discovery, scoring, and a Next.js UI. It includes:
 - Shared DB schema (`packages/shared-db`)
 
 ## Local Dev
-- Configure `.env` at repo root (used by all apps).
+- Copy `.env.example` to `.env` and fill in values (never commit `.env`).
 - Start local Postgres: `docker compose up -d postgres`
 - Run migrations: `cd apps/sellpy-scraper && npm run migrate`
 
@@ -41,6 +41,11 @@ When using IntelliJ’s built-in SSH tunnel:
 - **SSH/SSL tab** sets the local tunnel port (e.g. `55432`) and SSH host.
 
 ## Deploying Updates
-- Update `/opt/alphacrp/deploy/.env.prod` for secrets and `DATABASE_URL`.
-- Apply changes:
-  - `cd /opt/alphacrp/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml up -d`
+- Deployment is handled by GitHub Actions on push.
+- Configure GitHub Actions **Secrets** (not committed in repo). Required secrets:
+  - `SSH_HOST`, `SSH_USER`, `SSH_KEY`, `SSH_KEY_PASSPHRASE`
+  - `DOMAIN`, `LETSENCRYPT_EMAIL`
+  - `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `DATABASE_URL`
+  - `APP_USERNAME`, `APP_PASSWORD`
+  - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `GHCR_USERNAME`, `GHCR_TOKEN` (optional)
+- The workflow writes `/opt/alphacrp/deploy/.env.prod` on the server from secrets.
