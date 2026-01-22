@@ -5,10 +5,15 @@ services:
     image: postgres:16
     container_name: sellpy-postgres
     restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
     environment:
-      POSTGRES_USER: sellpy
-      POSTGRES_PASSWORD: sellpy
-      POSTGRES_DB: sellpy
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: postgres
     ports:
       - "5432:5432"
     volumes:

@@ -5,6 +5,11 @@ services:
     image: postgres:16
     container_name: sellpy-postgres
     restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -15,6 +20,11 @@ services:
   web:
     image: ghcr.io/georghans/alphacrp-web:latest
     restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
     env_file:
       - ./.env.prod
     depends_on:
@@ -25,6 +35,11 @@ services:
   worker:
     image: ghcr.io/georghans/alphacrp-worker:latest
     restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
     env_file:
       - ./.env.prod
     volumes:
@@ -43,10 +58,20 @@ services:
       - postgres
     working_dir: /app/apps/sellpy-scraper
     command: ["npm", "run", "migrate"]
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   caddy:
     image: caddy:2.8.4
     restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
     environment:
       DOMAIN: ${DOMAIN}
       LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
