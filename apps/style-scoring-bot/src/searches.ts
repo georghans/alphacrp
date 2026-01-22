@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq } from "../../../packages/shared-db/src/drizzle.ts";
 import { db } from "./db/client.js";
 import { StyleProfileInput } from "../evaluator/schemas.js";
 import * as schema from "../../../packages/shared-db/src/schema.ts";
