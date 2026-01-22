@@ -1,6 +1,5 @@
 import pLimit from "p-limit";
 import { createRequire } from "node:module";
-import * as sharedDb from "../../../../packages/shared-db/src/client";
 import * as schema from "../../../../packages/shared-db/src/schema.ts";
 import { loadConfig as loadScraperConfig } from "../../../../apps/sellpy-scraper/src/config";
 import { createHttpClient } from "../../../../apps/sellpy-scraper/src/utils/http";
@@ -15,14 +14,15 @@ const requireFromSchema = createRequire(
   new URL("../../../../packages/shared-db/src/schema.ts", import.meta.url)
 );
 const { and, eq } = requireFromSchema("drizzle-orm") as typeof import("drizzle-orm");
+const { drizzle } = requireFromSchema(
+  "drizzle-orm/node-postgres"
+) as typeof import("drizzle-orm/node-postgres");
+const { Pool } = requireFromSchema("pg") as typeof import("pg");
 
-const createDbClient =
-  (sharedDb as { createDbClient?: typeof sharedDb.createDbClient }).createDbClient ??
-  (sharedDb as { default?: { createDbClient?: typeof sharedDb.createDbClient } }).default
-    ?.createDbClient;
-
-if (!createDbClient) {
-  throw new Error("Failed to load createDbClient from shared-db");
+function createDbClient(databaseUrl: string) {
+  const pool = new Pool({ connectionString: databaseUrl });
+  const db = drizzle(pool);
+  return { db, pool };
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
