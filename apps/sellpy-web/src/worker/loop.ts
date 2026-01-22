@@ -1,6 +1,5 @@
 import pLimit from "p-limit";
 import { createRequire } from "node:module";
-import * as schema from "../../../../packages/shared-db/src/schema.ts";
 import { loadConfig as loadScraperConfig } from "../../../../apps/sellpy-scraper/src/config";
 import { createHttpClient } from "../../../../apps/sellpy-scraper/src/utils/http";
 import { crawlSearch } from "../../../../apps/sellpy-scraper/src/crawler/searchCrawler";
@@ -13,7 +12,6 @@ import { runEvaluation } from "../../../../apps/style-scoring-bot/src/queue/work
 const requireFromSchema = createRequire(
   new URL("../../../../packages/shared-db/src/schema.ts", import.meta.url)
 );
-const { and, eq } = requireFromSchema("drizzle-orm") as typeof import("drizzle-orm");
 const { drizzle } = requireFromSchema(
   "drizzle-orm/node-postgres"
 ) as typeof import("drizzle-orm/node-postgres");
@@ -32,9 +30,42 @@ function parseStringArray(value: unknown): string[] {
   return value.map((entry) => String(entry).trim()).filter(Boolean);
 }
 
+type SearchRow = {
+  id: string;
+  title: string;
+  search_terms: unknown;
+  search_prompt: string;
+  example_images: unknown;
+  is_active: boolean;
+  is_deleted: boolean;
+  created_at?: Date | string | null;
+  updated_at?: Date | string | null;
+};
+
+function normalizeSearchRow(row: SearchRow) {
+  return {
+    id: row.id,
+    title: row.title,
+    searchTerms: row.search_terms ?? [],
+    searchPrompt: row.search_prompt ?? "",
+    exampleImages: row.example_images ?? [],
+    isActive: row.is_active,
+    isDeleted: row.is_deleted,
+    createdAt: row.created_at ?? null,
+    updatedAt: row.updated_at ?? null
+  };
+}
+
+async function listActiveSearches(pool: InstanceType<typeof Pool>) {
+  const result = await pool.query<SearchRow>(
+    "select * from searches where is_active = true and is_deleted = false"
+  );
+  return result.rows.map(normalizeSearchRow);
+}
+
 async function runScraperLoop() {
   const config = loadScraperConfig();
-  const { db } = createDbClient(config.databaseUrl);
+  const { db, pool } = createDbClient(config.databaseUrl);
   const http = createHttpClient({
     userAgent: config.userAgent,
     rateLimitRps: config.rateLimitRps
@@ -45,10 +76,7 @@ async function runScraperLoop() {
   const maxItems = Number(process.env.SCRAPER_MAX_ITEMS ?? config.maxItems);
 
   while (true) {
-    const activeSearches = await db
-      .select()
-      .from(schema.searches)
-      .where(and(eq(schema.searches.isActive, true), eq(schema.searches.isDeleted, false)));
+    const activeSearches = await listActiveSearches(pool);
 
     for (const search of activeSearches) {
       const terms = parseStringArray(search.searchTerms);
@@ -93,7 +121,7 @@ async function runScraperLoop() {
 
 async function runMatcherLoop() {
   const config = loadMatcherConfig();
-  const { db } = createDbClient(config.DATABASE_URL);
+  const { db, pool } = createDbClient(config.DATABASE_URL);
   const client = new OpenRouterClient(config);
 
   const pollMs = Number(process.env.MATCHER_POLL_MS ?? 180000);
@@ -104,10 +132,7 @@ async function runMatcherLoop() {
   const concurrency = Number(process.env.MATCHER_CONCURRENCY ?? config.OPENROUTER_CONCURRENCY);
 
   while (true) {
-    const activeSearches = await db
-      .select()
-      .from(schema.searches)
-      .where(and(eq(schema.searches.isActive, true), eq(schema.searches.isDeleted, false)));
+    const activeSearches = await listActiveSearches(pool);
 
     for (const search of activeSearches) {
       const exampleImages = parseStringArray(search.exampleImages);
