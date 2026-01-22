@@ -1,7 +1,7 @@
 import pLimit from "p-limit";
 import { and, eq } from "drizzle-orm";
 import * as sharedDb from "../../../../packages/shared-db/src/client";
-import { searches } from "../../../../packages/shared-db/src/schema";
+import * as schema from "../../../../packages/shared-db/src/schema.ts";
 import { loadConfig as loadScraperConfig } from "../../../../apps/sellpy-scraper/src/config";
 import { createHttpClient } from "../../../../apps/sellpy-scraper/src/utils/http";
 import { crawlSearch } from "../../../../apps/sellpy-scraper/src/crawler/searchCrawler";
@@ -42,8 +42,8 @@ async function runScraperLoop() {
   while (true) {
     const activeSearches = await db
       .select()
-      .from(searches)
-      .where(and(eq(searches.isActive, true), eq(searches.isDeleted, false)));
+      .from(schema.searches)
+      .where(and(eq(schema.searches.isActive, true), eq(schema.searches.isDeleted, false)));
 
     for (const search of activeSearches) {
       const terms = parseStringArray(search.searchTerms);
@@ -101,8 +101,8 @@ async function runMatcherLoop() {
   while (true) {
     const activeSearches = await db
       .select()
-      .from(searches)
-      .where(and(eq(searches.isActive, true), eq(searches.isDeleted, false)));
+      .from(schema.searches)
+      .where(and(eq(schema.searches.isActive, true), eq(schema.searches.isDeleted, false)));
 
     for (const search of activeSearches) {
       const exampleImages = parseStringArray(search.exampleImages);
