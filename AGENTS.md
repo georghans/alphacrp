@@ -39,6 +39,30 @@ Automate Sellpy item discovery and matching. The system scrapes Sellpy offers, s
 - Dev server: `cd apps/sellpy-web && npm run dev`
 - Worker loop: `cd apps/sellpy-web && npm run worker`
 
+## Operations (Server)
+- **Host**: Hetzner VM at `46.62.233.55` (SSH as `root`).
+- **Deploy path**: `/opt/alphacrp/deploy`
+- **Compose file**: `/opt/alphacrp/deploy/docker-compose.prod.yml`
+- **Env file**: `/opt/alphacrp/deploy/.env.prod` (all runtime secrets + `DATABASE_URL`)
+- **Reverse proxy**: Caddy (`/opt/alphacrp/deploy/Caddyfile`)
+- **HTTP/HTTPS**:
+  - `http://46.62.233.55` works (IP HTTP).
+  - HTTPS should be used via the domain (e.g. `https://georghans.de`) because public CAs do not issue certs for bare IPs.
+
+## Logs (Server)
+- **Tail logs via SSH**:
+  - `ssh root@46.62.233.55 'cd /opt/alphacrp/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f --tail=200 web worker'`
+  - Helper script: `scripts/remote-logs.sh` (run locally with `SSH_HOST=root@46.62.233.55`)
+- **Rotation**: Docker log rotation enabled in compose (`driver: local`, `max-size: 50m`, `max-file: 5`) to prevent unbounded growth.
+
+## Database Access (Server)
+- **SSH tunnel** (manual):
+  - `ssh -L 55432:127.0.0.1:5432 root@46.62.233.55`
+  - Connect locally to `127.0.0.1:55432` using the creds from `/opt/alphacrp/deploy/.env.prod`.
+- **IntelliJ tunnel**:
+  - General tab host/port should be the **remote DB** (`127.0.0.1:5432`).
+  - SSH/SSL tab sets the local tunnel port (e.g. `55432`) and SSH host.
+
 ## Development Environment
 - `.env` at repo root provides configuration for all apps.
 - Requires local Postgres (Docker recommended).
