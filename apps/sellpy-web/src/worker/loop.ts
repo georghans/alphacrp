@@ -1,5 +1,5 @@
 import pLimit from "p-limit";
-import { and, eq } from "drizzle-orm";
+import { createRequire } from "node:module";
 import * as sharedDb from "../../../../packages/shared-db/src/client";
 import * as schema from "../../../../packages/shared-db/src/schema.ts";
 import { loadConfig as loadScraperConfig } from "../../../../apps/sellpy-scraper/src/config";
@@ -10,6 +10,11 @@ import { upsertOffer } from "../../../../apps/sellpy-scraper/src/db/upsertOffer"
 import { loadConfig as loadMatcherConfig } from "../../../../apps/style-scoring-bot/src/config";
 import { OpenRouterClient } from "../../../../apps/style-scoring-bot/src/evaluator/openrouterClient";
 import { runEvaluation } from "../../../../apps/style-scoring-bot/src/queue/worker";
+
+const requireFromSchema = createRequire(
+  new URL("../../../../packages/shared-db/src/schema.ts", import.meta.url)
+);
+const { and, eq } = requireFromSchema("drizzle-orm") as typeof import("drizzle-orm");
 
 const createDbClient =
   (sharedDb as { createDbClient?: typeof sharedDb.createDbClient }).createDbClient ??
