@@ -79,7 +79,7 @@ async function runScraperLoop() {
 
 async function runMatcherLoop() {
   const config = loadMatcherConfig();
-  const { db } = createDbClient(config.databaseUrl);
+  const { db } = createDbClient(config.DATABASE_URL);
   const client = new OpenRouterClient(config);
 
   const pollMs = Number(process.env.MATCHER_POLL_MS ?? 180000);
