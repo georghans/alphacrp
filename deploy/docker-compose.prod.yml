@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16
@@ -10,6 +8,8 @@ services:
       options:
         max-size: "50m"
         max-file: "5"
+    env_file:
+      - ./.env.prod
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

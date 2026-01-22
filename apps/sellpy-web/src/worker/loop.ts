@@ -1,6 +1,6 @@
 import pLimit from "p-limit";
 import { and, eq } from "drizzle-orm";
-import { createDbClient } from "../../../../packages/shared-db/src/client";
+import * as sharedDb from "../../../../packages/shared-db/src/client";
 import { searches } from "../../../../packages/shared-db/src/schema";
 import { loadConfig as loadScraperConfig } from "../../../../apps/sellpy-scraper/src/config";
 import { createHttpClient } from "../../../../apps/sellpy-scraper/src/utils/http";
@@ -10,6 +10,15 @@ import { upsertOffer } from "../../../../apps/sellpy-scraper/src/db/upsertOffer"
 import { loadConfig as loadMatcherConfig } from "../../../../apps/style-scoring-bot/src/config";
 import { OpenRouterClient } from "../../../../apps/style-scoring-bot/src/evaluator/openrouterClient";
 import { runEvaluation } from "../../../../apps/style-scoring-bot/src/queue/worker";
+
+const createDbClient =
+  (sharedDb as { createDbClient?: typeof sharedDb.createDbClient }).createDbClient ??
+  (sharedDb as { default?: { createDbClient?: typeof sharedDb.createDbClient } }).default
+    ?.createDbClient;
+
+if (!createDbClient) {
+  throw new Error("Failed to load createDbClient from shared-db");
+}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
