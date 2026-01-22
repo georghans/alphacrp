@@ -12,4 +12,4 @@ if [[ ${#SERVICES[@]} -eq 0 ]]; then
   SERVICES=(web worker)
 fi
 
-ssh "${SSH_HOST}" "cd /opt/alphacrp/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f --tail=200 ${SERVICES[*]}"
+ssh "${SSH_HOST}" "cd /opt/alphacrp/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f --timestamps --tail=200 ${SERVICES[*]}"

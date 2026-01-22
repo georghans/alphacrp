@@ -25,7 +25,7 @@ This repo powers Sellpy offer discovery, scoring, and a Next.js UI. It includes:
 
 ### Logs (easy access)
 - Tail logs via SSH:
-  - `ssh root@46.62.233.55 'cd /opt/alphacrp/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f --tail=200 web worker'`
+  - `ssh root@46.62.233.55 'cd /opt/alphacrp/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f --timestamps --tail=200 web worker'`
 - Helper script:
   - `SSH_HOST=root@46.62.233.55 ./scripts/remote-logs.sh web worker`
 - Log rotation is enabled in compose (`driver: local`, `max-size: 50m`, `max-file: 5`).
