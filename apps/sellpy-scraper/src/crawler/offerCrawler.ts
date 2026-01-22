@@ -173,7 +173,7 @@ export async function crawlOffer(
 
   const imagesFromHtml = extractImagesFromHtml(html);
   const imageUrls = details.imageUrls ?? imagesFromHtml;
-  const images = await Promise.all(
+  let images = await Promise.all(
     imageUrls.map(async (imageUrl, index) => {
       const downloaded = await fetchImageData();
       return {
@@ -184,6 +184,20 @@ export async function crawlOffer(
       };
     })
   );
+
+  if (images.length === 0 && config.usePlaywright !== "never") {
+    try {
+      const screenshots = await captureImageScreenshots(config, url, 5);
+      images = screenshots.map((dataUrl, index) => ({
+        position: index,
+        imageUrl: `${url}#screenshot-${index + 1}`,
+        imageData: dataUrl,
+        imageMime: "image/png"
+      }));
+    } catch (error) {
+      logger.warn({ url, error }, "Failed to capture fallback screenshots");
+    }
+  }
 
   if (config.usePlaywright !== "never") {
     try {

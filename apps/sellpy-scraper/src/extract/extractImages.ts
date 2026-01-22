@@ -28,13 +28,18 @@ export function extractImagesFromHtml(html: string): string[] {
   const urls: string[] = [];
 
   $("img").each((_, el) => {
-    const srcset = $(el).attr("srcset");
-    const src = $(el).attr("src");
+    const srcset = $(el).attr("srcset") ?? $(el).attr("data-srcset");
+    const src =
+      $(el).attr("src") ??
+      $(el).attr("data-src") ??
+      $(el).attr("data-lazy-src") ??
+      $(el).attr("data-original");
     if (srcset) {
       const candidates = parseSrcSet(srcset);
       const best = pickLargestUrl(candidates);
       if (best) urls.push(best);
-    } else if (src) {
+    }
+    if (src) {
       urls.push(src);
     }
   });

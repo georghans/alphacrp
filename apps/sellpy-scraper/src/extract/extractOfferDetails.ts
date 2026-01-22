@@ -154,5 +154,15 @@ export function extractOfferDetails(html: string): OfferDetails {
     }
   }
 
+  const h1 = $("h1").first().text().trim();
+  if (h1 && !details.title) {
+    details.title = h1;
+  }
+
+  const pageTitle = $("title").text().trim();
+  if (pageTitle && !details.title) {
+    details.title = pageTitle;
+  }
+
   return details;
 }
