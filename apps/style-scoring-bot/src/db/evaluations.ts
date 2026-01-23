@@ -1,7 +1,9 @@
 import { db } from "./client.js";
 import * as schema from "../../../../packages/shared-db/src/schema.ts";
 
-const { offerSearchEvaluations } = schema;
+const resolvedSchema =
+  (schema as typeof schema & { default?: typeof schema }).default ?? schema;
+const { offerSearchEvaluations } = resolvedSchema;
 
 export type EvaluationInsert = {
   offerId: string;

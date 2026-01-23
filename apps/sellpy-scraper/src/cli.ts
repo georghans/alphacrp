@@ -8,9 +8,14 @@ import { crawlOffer } from "./crawler/offerCrawler.js";
 import { createDbClient } from "./db/client.js";
 import { upsertOffer } from "./db/upsertOffer.js";
 import * as schema from "../../../packages/shared-db/src/schema.ts";
-const { searches } = schema;
+const resolvedSchema =
+  (schema as typeof schema & { default?: typeof schema }).default ?? schema;
+const { searches } = resolvedSchema;
 import drizzleApi from "../../../packages/shared-db/src/drizzle.ts";
-const { eq } = drizzleApi;
+const resolvedDrizzle =
+  (drizzleApi as typeof drizzleApi & { default?: typeof drizzleApi }).default ??
+  drizzleApi;
+const { eq } = resolvedDrizzle;
 
 const program = new Command();
 

@@ -3,8 +3,13 @@ import { randomUUID } from "node:crypto";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../../../packages/shared-db/src/schema.ts";
 
-const { and, eq } = drizzleApi;
-const { offers, offerImages } = schema;
+const resolvedDrizzle =
+  (drizzleApi as typeof drizzleApi & { default?: typeof drizzleApi }).default ??
+  drizzleApi;
+const { and, eq } = resolvedDrizzle;
+const resolvedSchema =
+  (schema as typeof schema & { default?: typeof schema }).default ?? schema;
+const { offers, offerImages } = resolvedSchema;
 
 export type OfferRecord = {
   searchId: string;

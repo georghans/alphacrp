@@ -2,8 +2,13 @@ import drizzleApi from "../../../../packages/shared-db/src/drizzle.ts";
 import { db } from "./client.js";
 import * as schema from "../../../../packages/shared-db/src/schema.ts";
 
-const { and, eq, exists, inArray, isNotNull, isNull } = drizzleApi;
-const { offers, offerImages, offerSearchEvaluations } = schema;
+const resolvedDrizzle =
+  (drizzleApi as typeof drizzleApi & { default?: typeof drizzleApi }).default ??
+  drizzleApi;
+const { and, eq, exists, inArray, isNotNull, isNull } = resolvedDrizzle;
+const resolvedSchema =
+  (schema as typeof schema & { default?: typeof schema }).default ?? schema;
+const { offers, offerImages, offerSearchEvaluations } = resolvedSchema;
 
 function mapOfferRows(rows: Array<{ offer: typeof offers.$inferSelect; image: typeof offerImages.$inferSelect }>) {
   const byId = new Map<string, typeof offers.$inferSelect & { images: typeof offerImages.$inferSelect[] }>();

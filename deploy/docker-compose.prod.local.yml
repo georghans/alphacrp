@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: sellpy-postgres
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
+    env_file:
+      - ./.env.prod.local
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - sellpy_pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  web:
+    image: sellpy-web-local
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
+    env_file:
+      - ./.env.prod.local
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+
+  worker:
+    image: sellpy-worker-local
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
+    env_file:
+      - ./.env.prod.local
+    volumes:
+      - worker_data:/data
+    shm_size: "1gb"
+    depends_on:
+      - postgres
+
+  migrate:
+    image: sellpy-worker-local
+    profiles:
+      - migrate
+    env_file:
+      - ./.env.prod.local
+    depends_on:
+      - postgres
+    working_dir: /app/apps/sellpy-scraper
+    command: ["npm", "run", "migrate"]
+    logging:
+      driver: local
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  sellpy_pg_data:
+  worker_data:

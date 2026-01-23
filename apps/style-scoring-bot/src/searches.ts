@@ -3,8 +3,14 @@ import { db } from "./db/client.js";
 import { StyleProfileInput } from "../evaluator/schemas.js";
 import * as schema from "../../../packages/shared-db/src/schema.ts";
 
-const { eq } = drizzleApi;
-const { searches } = schema;
+const resolvedSchema =
+  (schema as typeof schema & { default?: typeof schema }).default ?? schema;
+
+const resolvedDrizzle =
+  (drizzleApi as typeof drizzleApi & { default?: typeof drizzleApi }).default ??
+  drizzleApi;
+const { eq } = resolvedDrizzle;
+const { searches } = resolvedSchema;
 
 export async function createSearch(input: StyleProfileInput) {
   const rows = await db
@@ -20,7 +26,7 @@ export async function createSearch(input: StyleProfileInput) {
     .returning();
 
   const search = rows[0];
-  if (!search) {cd
+  if (!search) {
     throw new Error("Failed to create search");
   }
   return search;

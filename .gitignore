@@ -218,3 +218,4 @@ mocks/rio-user-menu.js
 
 # we don't want to have to commit this updated comment number again and again and AGAIN all the time
 public/mockServiceWorker.js
+/.pw-browsers/
