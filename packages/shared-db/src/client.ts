@@ -1,4 +1,6 @@
-import { drizzle, Pool } from "./drizzle.js";
+import drizzleApi from "./drizzle.js";
+
+const { drizzle, Pool } = drizzleApi;
 
 export function createDbClient(databaseUrl: string) {
   const pool = new Pool({ connectionString: databaseUrl });

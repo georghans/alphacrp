@@ -1,8 +1,9 @@
-import { and, eq } from "../../../../packages/shared-db/src/drizzle.ts";
+import drizzleApi from "../../../../packages/shared-db/src/drizzle.ts";
 import { randomUUID } from "node:crypto";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import * as schema from "../../../../packages/shared-db/src/schema.ts";
 
+const { and, eq } = drizzleApi;
 const { offers, offerImages } = schema;
 
 export type OfferRecord = {

@@ -9,7 +9,8 @@ import { createDbClient } from "./db/client.js";
 import { upsertOffer } from "./db/upsertOffer.js";
 import * as schema from "../../../packages/shared-db/src/schema.ts";
 const { searches } = schema;
-import { eq } from "../../../packages/shared-db/src/drizzle.ts";
+import drizzleApi from "../../../packages/shared-db/src/drizzle.ts";
+const { eq } = drizzleApi;
 
 const program = new Command();
 

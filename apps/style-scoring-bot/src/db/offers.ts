@@ -1,7 +1,8 @@
-import { and, eq, exists, inArray, isNotNull, isNull } from "../../../../packages/shared-db/src/drizzle.ts";
+import drizzleApi from "../../../../packages/shared-db/src/drizzle.ts";
 import { db } from "./client.js";
 import * as schema from "../../../../packages/shared-db/src/schema.ts";
 
+const { and, eq, exists, inArray, isNotNull, isNull } = drizzleApi;
 const { offers, offerImages, offerSearchEvaluations } = schema;
 
 function mapOfferRows(rows: Array<{ offer: typeof offers.$inferSelect; image: typeof offerImages.$inferSelect }>) {
