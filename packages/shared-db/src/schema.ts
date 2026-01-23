@@ -1,4 +1,6 @@
-import {
+import drizzleApi from "./drizzle.js";
+
+const {
   pgTable,
   text,
   uuid,
@@ -9,7 +11,7 @@ import {
   jsonb,
   uniqueIndex,
   index
-} from "drizzle-orm/pg-core";
+} = drizzleApi;
 
 export const searches = pgTable("searches", {
   id: uuid("id").defaultRandom().primaryKey(),
