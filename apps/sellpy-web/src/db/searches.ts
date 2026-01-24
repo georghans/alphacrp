@@ -3,6 +3,7 @@ import { getDb } from "./client";
 import { searches } from "./schema";
 
 export type SearchInsert = {
+  id?: string;
   title: string;
   searchTerms: string[];
   searchPrompt: string;
@@ -36,16 +37,18 @@ export async function countSearches() {
 
 export async function createSearch(data: SearchInsert) {
   const db = getDb();
+  const insertValues = {
+    title: data.title,
+    searchTerms: data.searchTerms,
+    searchPrompt: data.searchPrompt,
+    exampleImages: data.exampleImages,
+    isActive: data.isActive,
+    isDeleted: false
+  } as const;
+  const values = data.id ? { ...insertValues, id: data.id } : insertValues;
   const rows = await db
     .insert(searches)
-    .values({
-      title: data.title,
-      searchTerms: data.searchTerms,
-      searchPrompt: data.searchPrompt,
-      exampleImages: data.exampleImages,
-      isActive: data.isActive,
-      isDeleted: false
-    })
+    .values(values)
     .returning();
 
   return rows[0] ?? null;

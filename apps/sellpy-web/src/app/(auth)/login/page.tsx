@@ -1,36 +1,62 @@
-import { login } from "../../actions/auth";
+import { login } from "../../actions/auth"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 export default function LoginPage({
-  searchParams
+  searchParams,
 }: {
-  searchParams?: { error?: string };
+  searchParams?: { error?: string }
 }) {
-  const hasError = Boolean(searchParams?.error);
+  const hasError = Boolean(searchParams?.error)
 
   return (
-    <div className="card" style={{ maxWidth: 420, margin: "12vh auto" }}>
-      <form className="form" action={login}>
-        <div className="field">
-          <label className="label" htmlFor="username">
-            Username
-          </label>
-          <input className="input" id="username" name="username" type="text" required />
+    <main className="flex min-h-screen items-center justify-center px-4 py-10">
+      <div className="w-full max-w-md space-y-6 border-2 border-foreground bg-card p-8">
+        <div className="space-y-2">
+          <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground">SECURE ACCESS</p>
+          <h1 className="font-mono text-2xl font-bold uppercase tracking-wider text-foreground">
+            OPERATOR LOGIN
+          </h1>
         </div>
-        <div className="field">
-          <label className="label" htmlFor="password">
-            Password
-          </label>
-          <input className="input" id="password" name="password" type="password" required />
-        </div>
-        {hasError && (
-          <div style={{ color: "var(--accent)", fontSize: 13, letterSpacing: "0.08em" }}>
-            Invalid credentials
+
+        <form className="space-y-6" action={login}>
+          <div className="space-y-2">
+            <Label htmlFor="username" className="font-mono text-xs uppercase tracking-wider text-foreground">
+              USERNAME
+            </Label>
+            <Input
+              id="username"
+              name="username"
+              type="text"
+              required
+              className="border-2 border-foreground bg-input font-mono text-sm"
+            />
           </div>
-        )}
-        <button className="button" type="submit">
-          Log in
-        </button>
-      </form>
-    </div>
-  );
+          <div className="space-y-2">
+            <Label htmlFor="password" className="font-mono text-xs uppercase tracking-wider text-foreground">
+              PASSWORD
+            </Label>
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              required
+              className="border-2 border-foreground bg-input font-mono text-sm"
+            />
+          </div>
+
+          {hasError && (
+            <div className="border-2 border-destructive bg-destructive/10 p-3 font-mono text-[10px] uppercase tracking-wider text-destructive">
+              INVALID CREDENTIALS
+            </div>
+          )}
+
+          <Button className="w-full border-2 border-foreground bg-foreground font-mono text-xs uppercase tracking-wider text-background hover:border-accent hover:bg-accent hover:text-accent-foreground">
+            LOGIN
+          </Button>
+        </form>
+      </div>
+    </main>
+  )
 }

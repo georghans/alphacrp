@@ -3,6 +3,9 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     externalDir: true
+  },
+  images: {
+    unoptimized: true
   }
 };
 

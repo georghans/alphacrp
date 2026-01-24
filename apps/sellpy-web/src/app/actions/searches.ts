@@ -10,37 +10,44 @@ import {
   updateSearch
 } from "../../db/searches";
 
-function parseLines(value: FormDataEntryValue | null) {
+function parseList(value: FormDataEntryValue | null) {
   if (!value) return [];
-  return String(value)
-    .split("\n")
+  const raw = String(value).trim();
+  if (!raw) return [];
+  if (raw.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.map((entry) => String(entry).trim()).filter(Boolean);
+      }
+    } catch {
+      // Fall through to delimiter parsing.
+    }
+  }
+  return raw
+    .split(/[\n,]/)
     .map((entry) => entry.trim())
     .filter(Boolean);
 }
 
+function parseBoolean(value: FormDataEntryValue | null) {
+  const raw = String(value ?? "").toLowerCase();
+  return raw === "1" || raw === "true" || raw === "on";
+}
+
 export async function createSearchAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
   const titleInput = String(formData.get("title") ?? "").trim();
-  const searchTerms = parseLines(formData.get("searchTerms"));
+  const searchTerms = parseList(formData.get("searchTerms"));
   const searchPrompt = String(formData.get("searchPrompt") ?? "").trim();
-  const exampleImages = parseLines(formData.get("exampleImages"));
-  const isActive = formData.get("isActive") === "on";
-
-  if (searchTerms.length === 0) {
-    throw new Error("Search terms are required");
-  }
-
-  if (!searchPrompt) {
-    throw new Error("Search prompt is required");
-  }
-
-  if (exampleImages.length < 1 || exampleImages.length > 5) {
-    throw new Error("Example images must be between 1 and 5");
-  }
+  const exampleImages = parseList(formData.get("exampleImages"));
+  const isActive = parseBoolean(formData.get("isActive"));
 
   const count = await countSearches();
   const title = titleInput || `Search #${count + 1}`;
 
   const search = await createSearch({
+    id: id || undefined,
     title,
     searchTerms,
     searchPrompt,
@@ -53,7 +60,8 @@ export async function createSearchAction(formData: FormData) {
   }
 
   revalidatePath("/searches");
-  redirect(`/searches/${search.id}`);
+  revalidatePath("/");
+  redirect("/searches");
 }
 
 export async function updateSearchAction(formData: FormData) {
@@ -68,22 +76,10 @@ export async function updateSearchAction(formData: FormData) {
   }
 
   const titleInput = String(formData.get("title") ?? "").trim();
-  const searchTerms = parseLines(formData.get("searchTerms"));
+  const searchTerms = parseList(formData.get("searchTerms"));
   const searchPrompt = String(formData.get("searchPrompt") ?? "").trim();
-  const exampleImages = parseLines(formData.get("exampleImages"));
-  const isActive = formData.get("isActive") === "on";
-
-  if (searchTerms.length === 0) {
-    throw new Error("Search terms are required");
-  }
-
-  if (!searchPrompt) {
-    throw new Error("Search prompt is required");
-  }
-
-  if (exampleImages.length < 1 || exampleImages.length > 5) {
-    throw new Error("Example images must be between 1 and 5");
-  }
+  const exampleImages = parseList(formData.get("exampleImages"));
+  const isActive = parseBoolean(formData.get("isActive"));
 
   await updateSearch(id, {
     title: titleInput || existing.title,
@@ -95,6 +91,8 @@ export async function updateSearchAction(formData: FormData) {
 
   revalidatePath("/searches");
   revalidatePath(`/searches/${id}`);
+  revalidatePath("/");
+  redirect("/searches");
 }
 
 export async function deleteSearchAction(formData: FormData) {
@@ -110,5 +108,33 @@ export async function deleteSearchAction(formData: FormData) {
 
   await softDeleteSearch(id);
   revalidatePath("/searches");
+  revalidatePath("/");
   redirect("/searches");
+}
+
+export async function deleteSearchQuickAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) {
+    throw new Error("Missing search id");
+  }
+
+  const search = await getSearch(id);
+  if (!search) {
+    throw new Error("Search not found");
+  }
+
+  await softDeleteSearch(id);
+  revalidatePath("/searches");
+  revalidatePath("/");
+}
+
+export async function setSearchActiveAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) {
+    throw new Error("Missing search id");
+  }
+
+  await updateSearch(id, { isActive: parseBoolean(formData.get("isActive")) });
+  revalidatePath("/searches");
+  revalidatePath("/");
 }
