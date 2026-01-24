@@ -29,6 +29,16 @@ Automate Sellpy item discovery and matching. The system scrapes Sellpy offers, s
 - Reset DB (early dev ok): `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`
 - Migrate: `cd apps/sellpy-scraper && npm run migrate`
 
+### Local Prod-Like Stack (Docker)
+- Env file (local only): `deploy/.env.prod.local`
+- Build images:
+  - `docker build -f Dockerfile.web -t sellpy-web-local .`
+  - `docker build -f Dockerfile.worker -t sellpy-worker-local .`
+- Start stack:
+  - `docker compose --env-file deploy/.env.prod.local -f deploy/docker-compose.prod.local.yml up -d`
+- Run migrations:
+  - `docker compose --env-file deploy/.env.prod.local -f deploy/docker-compose.prod.local.yml run --rm migrate`
+
 ### Scraper
 - Run: `cd apps/sellpy-scraper && npm run dev -- --term "jacket" --max-items 20 --max-pages 2 --search-id <searchId>`
 

@@ -12,6 +12,20 @@ This repo powers Sellpy offer discovery, scoring, and a Next.js UI. It includes:
 - Start local Postgres: `docker compose up -d postgres`
 - Run migrations: `cd apps/sellpy-scraper && npm run migrate`
 
+## Local Prod-Like Stack (Docker)
+Use the prod-style compose locally with local images and an env file.
+
+1) Create `deploy/.env.prod.local` (do not commit). It should include:
+   - `DATABASE_URL=postgresql://user:password@postgres:5432/postgres`
+   - `OPENROUTER_API_KEY=...` (required for scoring)
+2) Build images:
+   - `docker build -f Dockerfile.web -t sellpy-web-local .`
+   - `docker build -f Dockerfile.worker -t sellpy-worker-local .`
+3) Start stack:
+   - `docker compose --env-file deploy/.env.prod.local -f deploy/docker-compose.prod.local.yml up -d`
+4) Run migrations:
+   - `docker compose --env-file deploy/.env.prod.local -f deploy/docker-compose.prod.local.yml run --rm migrate`
+
 ## Server Operations (Hetzner)
 - **Host**: `46.62.233.55` (SSH as `root`)
 - **Deploy dir**: `/opt/alphacrp/deploy`
