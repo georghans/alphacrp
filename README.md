@@ -11,6 +11,7 @@ This repo powers Sellpy offer discovery, scoring, and a Next.js UI. It includes:
 - Copy `.env.example` to `.env` and fill in values (never commit `.env`).
 - Start local Postgres: `docker compose up -d postgres`
 - Run migrations: `cd apps/sellpy-scraper && npm run migrate`
+- Reference image uploads require S3-compatible storage credentials (see `.env.example`).
 
 ## Local Prod-Like Stack (Docker)
 Use the prod-style compose locally with local images and an env file.
@@ -18,6 +19,7 @@ Use the prod-style compose locally with local images and an env file.
 1) Create `deploy/.env.prod.local` (do not commit). It should include:
    - `DATABASE_URL=postgresql://user:password@postgres:5432/postgres`
    - `OPENROUTER_API_KEY=...` (required for scoring)
+   - `BUCKET_ENDPOINT`, `BUCKET_REGION`, `BUCKET_NAME`, `BUCKET_KEY`, `BUCKET_SECRET` for reference images
 2) Build images:
    - `docker build -f Dockerfile.web -t sellpy-web-local .`
    - `docker build -f Dockerfile.worker -t sellpy-worker-local .`
@@ -62,4 +64,11 @@ When using IntelliJ’s built-in SSH tunnel:
   - `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `DATABASE_URL`
   - `APP_USERNAME`, `APP_PASSWORD`
   - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `GHCR_USERNAME`, `GHCR_TOKEN` (optional)
+  - `BUCKET_ENDPOINT`, `BUCKET_REGION`, `BUCKET_NAME`, `BUCKET_KEY`, `BUCKET_SECRET`
+  - Optional: `BUCKET_PUBLIC_BASE_URL`, `BUCKET_FORCE_PATH_STYLE`
 - The workflow writes `/opt/alphacrp/deploy/.env.prod` on the server from secrets.
+
+## Reference Image Storage
+- Reference images are uploaded from the web UI to an S3-compatible bucket and stored as public URLs in `searches.example_images`.
+- Upload endpoint: `POST /api/reference-images` (used by the UI).
+- Matcher consumes the stored URLs directly when building prompts.

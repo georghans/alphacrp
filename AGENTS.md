@@ -2,9 +2,11 @@
 
 ## Project Purpose
 Automate Sellpy item discovery and matching. The system scrapes Sellpy offers, stores them in Postgres, and evaluates offers against search prompts + example images using OpenRouter, exposing results in a unified Next.js UI.
+Reference images are uploaded to an S3-compatible bucket (Hetzner Object Storage) and stored as public URLs in the database.
 
 ## Structure
 - `apps/sellpy-web`: Next.js app with login + UI for searches, offers, matches.
+- Reference images are uploaded via `POST /api/reference-images` to S3-compatible storage and stored as URLs in `searches.example_images` (UI enforces 1–5 images).
 - `apps/sellpy-scraper`: crawls Sellpy search results and offer pages, extracts metadata + images.
 - `apps/style-scoring-bot`: evaluates offers against searches using OpenRouter (Gemini 3 Flash).
 - `packages/shared-db`: shared Drizzle schema + migrations + Postgres client.
@@ -12,7 +14,7 @@ Automate Sellpy item discovery and matching. The system scrapes Sellpy offers, s
 
 ## Architecture (High Level)
 1) **Scrape**: `apps/sellpy-scraper` discovers offers for a search term, extracts metadata + images, and upserts into Postgres with a `search_id`.
-2) **Score**: `apps/style-scoring-bot` reads offers for a search, builds prompts from search prompt + example images, calls OpenRouter, and stores decisions in `offer_search_evaluations`.
+2) **Score**: `apps/style-scoring-bot` reads offers for a search, builds prompts from search prompt + example image URLs (bucket), calls OpenRouter, and stores decisions in `offer_search_evaluations`.
 3) **View**: `apps/sellpy-web` reads from Postgres to show searches, all offers, and matched offers.
 
 ## Technologies
@@ -78,6 +80,7 @@ Automate Sellpy item discovery and matching. The system scrapes Sellpy offers, s
 - Requires local Postgres (Docker recommended).
 - Playwright Chromium must be installed for scraping.
 - OpenRouter API key + model required for evaluation.
+- Reference image uploads require S3-compatible storage credentials (`BUCKET_*` vars in `.env.example`).
 
 ## Deployment Secrets (GitHub Actions)
 - Secrets required for deploy workflow (never commit to repo):
@@ -86,6 +89,8 @@ Automate Sellpy item discovery and matching. The system scrapes Sellpy offers, s
   - `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `DATABASE_URL`
   - `APP_USERNAME`, `APP_PASSWORD`
   - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `GHCR_USERNAME`, `GHCR_TOKEN` (optional)
+  - `BUCKET_ENDPOINT`, `BUCKET_REGION`, `BUCKET_NAME`, `BUCKET_KEY`, `BUCKET_SECRET`
+  - Optional: `BUCKET_PUBLIC_BASE_URL`, `BUCKET_FORCE_PATH_STYLE`
 
 ## Development DB Reset
 - During early development it is acceptable to wipe the database before each run.
@@ -130,4 +135,4 @@ The two apps are decoupled and run independently; data flow is via the shared da
 
 ## What The Apps Do (Concise)
 - **apps/sellpy-scraper**: Given a search term, it crawls Sellpy, extracts offer metadata + images, and stores/upserts the results in the shared PostgreSQL database.
-- **apps/style-scoring-bot**: Given a style profile (prompt + example images), it evaluates offers in the shared database with a multimodal model, producing MATCH/NO_MATCH decisions and scores for later filtering or alerting.
+- **apps/style-scoring-bot**: Given a style profile (prompt + example image URLs), it evaluates offers in the shared database with a multimodal model, producing MATCH/NO_MATCH decisions and scores for later filtering or alerting.
