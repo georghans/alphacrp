@@ -74,7 +74,6 @@ export function SearchCard({ search }: SearchCardProps) {
               alt={search.title}
               fill
               className="object-cover grayscale transition-all duration-300 group-hover:grayscale-0"
-              crossOrigin="anonymous"
             />
           ) : (
             <div className="flex h-full items-center justify-center bg-muted">

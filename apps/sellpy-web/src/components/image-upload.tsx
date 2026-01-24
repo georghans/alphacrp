@@ -103,7 +103,6 @@ export function ImageUpload({ images, onChange, maxImages = 5, searchId }: Image
                 alt={`Reference image ${index + 1}`}
                 fill
                 className="object-cover grayscale transition-all duration-300 group-hover:grayscale-0"
-                crossOrigin="anonymous"
               />
               <button
                 type="button"
