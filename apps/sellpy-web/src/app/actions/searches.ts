@@ -43,6 +43,10 @@ export async function createSearchAction(formData: FormData) {
   const exampleImages = parseList(formData.get("exampleImages"));
   const isActive = parseBoolean(formData.get("isActive"));
 
+  if (exampleImages.length < 1 || exampleImages.length > 5) {
+    throw new Error("Example images must be between 1 and 5");
+  }
+
   const count = await countSearches();
   const title = titleInput || `Search #${count + 1}`;
 
@@ -80,6 +84,10 @@ export async function updateSearchAction(formData: FormData) {
   const searchPrompt = String(formData.get("searchPrompt") ?? "").trim();
   const exampleImages = parseList(formData.get("exampleImages"));
   const isActive = parseBoolean(formData.get("isActive"));
+
+  if (exampleImages.length < 1 || exampleImages.length > 5) {
+    throw new Error("Example images must be between 1 and 5");
+  }
 
   await updateSearch(id, {
     title: titleInput || existing.title,

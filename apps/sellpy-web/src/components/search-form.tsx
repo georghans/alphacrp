@@ -58,9 +58,11 @@ export function SearchForm({ search, mode, createId }: SearchFormProps) {
   const [images, setImages] = useState<string[]>(search?.images ?? [])
   const [isActive, setIsActive] = useState(search?.isActive ?? true)
 
-  const isValid = title.trim() && prompt.trim()
+  const hasValidImageCount = images.length >= 1 && images.length <= 5
+  const isValid = Boolean(title.trim() && prompt.trim() && hasValidImageCount)
   const formAction = mode === "create" ? createSearchAction : updateSearchAction
   const formId = search?.id ?? createId ?? ""
+  const uploadSearchId = search?.id ?? createId
 
   return (
     <form action={formAction} className="space-y-8">
@@ -206,7 +208,7 @@ export function SearchForm({ search, mode, createId }: SearchFormProps) {
               </p>
             </div>
             <div className="p-6">
-              <ImageUpload images={images} onChange={setImages} maxImages={5} />
+              <ImageUpload images={images} onChange={setImages} maxImages={5} searchId={uploadSearchId} />
             </div>
           </div>
         </div>

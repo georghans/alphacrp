@@ -89,6 +89,13 @@ jobs:
             IMAGE_MAX_BYTES=5242880
             IMAGE_CACHE_DIR=/data/image-cache
             FORCE_BASE64_IMAGES=false
+            BUCKET_ENDPOINT=${{ secrets.BUCKET_ENDPOINT }}
+            BUCKET_REGION=${{ secrets.BUCKET_REGION }}
+            BUCKET_NAME=${{ secrets.BUCKET_NAME }}
+            BUCKET_KEY=${{ secrets.BUCKET_KEY }}
+            BUCKET_SECRET=${{ secrets.BUCKET_SECRET }}
+            BUCKET_PUBLIC_BASE_URL=${{ secrets.BUCKET_PUBLIC_BASE_URL }}
+            BUCKET_FORCE_PATH_STYLE=false
             HEADLESS=true
             RATE_LIMIT_RPS=2
             CONCURRENCY=3
