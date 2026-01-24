@@ -5,10 +5,9 @@ import { redirect } from "next/navigation";
 import { AUTH_COOKIE, isValidCredentials } from "../../lib/auth";
 
 export async function login(formData: FormData) {
-  const username = String(formData.get("username") ?? "").trim();
   const password = String(formData.get("password") ?? "").trim();
 
-  if (!isValidCredentials(username, password)) {
+  if (!isValidCredentials(password)) {
     redirect("/login?error=1");
   }
 
@@ -18,7 +17,7 @@ export async function login(formData: FormData) {
     path: "/"
   });
 
-  redirect("/searches");
+  redirect("/");
 }
 
 export async function logout() {

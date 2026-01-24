@@ -13,26 +13,7 @@ export default function LoginPage({
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-10">
       <div className="w-full max-w-md space-y-6 border-2 border-foreground bg-card p-8">
-        <div className="space-y-2">
-          <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground">SECURE ACCESS</p>
-          <h1 className="font-mono text-2xl font-bold uppercase tracking-wider text-foreground">
-            OPERATOR LOGIN
-          </h1>
-        </div>
-
         <form className="space-y-6" action={login}>
-          <div className="space-y-2">
-            <Label htmlFor="username" className="font-mono text-xs uppercase tracking-wider text-foreground">
-              USERNAME
-            </Label>
-            <Input
-              id="username"
-              name="username"
-              type="text"
-              required
-              className="border-2 border-foreground bg-input font-mono text-sm"
-            />
-          </div>
           <div className="space-y-2">
             <Label htmlFor="password" className="font-mono text-xs uppercase tracking-wider text-foreground">
               PASSWORD
