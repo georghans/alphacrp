@@ -35,14 +35,14 @@ export function Navigation() {
           </div>
           <div className="hidden sm:block">
             <span className="font-mono text-sm font-bold uppercase tracking-[0.2em] text-foreground">ALPHASCRAPE</span>
-            <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">FASHION SEARCH ENGINE</span>
+            <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">RESALE SEARCH AGENT</span>
           </div>
         </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-0 md:flex">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || 
+            const isActive = pathname === item.href ||
               (item.href !== "/" && pathname.startsWith(item.href))
             return (
               <Link
@@ -83,7 +83,7 @@ export function Navigation() {
             </SheetHeader>
             <nav className="flex flex-col">
               {navItems.map((item, index) => {
-                const isActive = pathname === item.href || 
+                const isActive = pathname === item.href ||
                   (item.href !== "/" && pathname.startsWith(item.href))
                 return (
                   <Link
