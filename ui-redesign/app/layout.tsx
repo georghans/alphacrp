@@ -8,7 +8,7 @@ const _spaceMono = Space_Mono({ subsets: ["latin"], weight: ["400", "700"] });
 const _inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'ALPHASCRAPE // FASHION SEARCH ENGINE',
+  title: 'ALPHASCRAPE // RESALE SEARCH AGENT',
   description: 'AI-powered search automation for fashion resale platforms',
   generator: 'v0.app',
   icons: {
