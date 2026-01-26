@@ -5,6 +5,11 @@ import { createPage } from "../utils/playwright.js";
 import type { AppConfig } from "../config.js";
 import type { HttpClient } from "../utils/http.js";
 
+type AlgoliaHit = Record<string, unknown> & {
+  objectID?: string;
+  itemIO?: string;
+};
+
 function buildSearchUrl(config: AppConfig, term: string, page?: number): string {
   const url = new URL(config.searchPath, config.baseUrl);
   url.searchParams.set(config.searchQueryParam, term);
@@ -15,6 +20,62 @@ function buildSearchUrl(config: AppConfig, term: string, page?: number): string 
     url.searchParams.set("lang", config.locale);
   }
   return url.toString();
+}
+
+function buildItemUrl(baseUrl: string, id: string) {
+  return new URL(`/item/${id}`, baseUrl).toString();
+}
+
+async function collectAlgoliaOffers(
+  page: Awaited<ReturnType<typeof createPage>>["page"],
+  config: AppConfig,
+  maxItems?: number
+): Promise<SearchOffer[]> {
+  const offers = new Map<string, SearchOffer>();
+  const pending: Promise<void>[] = [];
+
+  const handler = (response: { url: () => string; request: () => { method: () => string }; json: () => Promise<unknown> }) => {
+    const url = response.url();
+    if (!url.includes("algolia.net/1/indexes")) return;
+    if (response.request().method() !== "POST") return;
+
+    pending.push(
+      response
+        .json()
+        .then((payload) => {
+          const results = (payload as { results?: unknown[] } | null)?.results;
+          if (!Array.isArray(results)) return;
+          for (const result of results) {
+            const hits = (result as { hits?: unknown[] } | null)?.hits;
+            if (!Array.isArray(hits)) continue;
+            for (const rawHit of hits) {
+              const hit = rawHit as AlgoliaHit;
+              const id = hit.objectID ?? hit.itemIO;
+              if (!id) continue;
+              const url = buildItemUrl(config.baseUrl, id);
+              if (!offers.has(url)) {
+                offers.set(url, {
+                  url,
+                  nativeExternalId: String(id),
+                  raw: hit
+                });
+              }
+              if (maxItems && offers.size >= maxItems) return;
+            }
+          }
+        })
+        .catch(() => {
+          // ignore parse errors
+        })
+    );
+  };
+
+  page.on("response", handler);
+  await page.waitForTimeout(4000);
+  page.off("response", handler);
+  await Promise.allSettled(pending);
+
+  return Array.from(offers.values()).slice(0, maxItems ?? Number.MAX_SAFE_INTEGER);
 }
 
 async function fetchSearchPage(
@@ -71,7 +132,14 @@ async function crawlWithPlaywright(
   const { page, context } = await createPage(config);
   const searchUrl = buildSearchUrl(config, term, 1);
   logger.info({ searchUrl }, "Playwright search navigation");
+  const algoliaPromise = collectAlgoliaOffers(page, config, maxItems);
   await page.goto(searchUrl, { waitUntil: "networkidle" });
+
+  const algoliaOffers = await algoliaPromise;
+  if (algoliaOffers.length > 0) {
+    await context.close();
+    return algoliaOffers;
+  }
 
   const offers = new Map<string, SearchOffer>();
   let previousCount = 0;
