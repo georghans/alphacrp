@@ -120,3 +120,4 @@ jobs:
             cd /opt/alphacrp/deploy
             docker compose --env-file .env.prod -f docker-compose.prod.yml pull
             docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+            docker image prune -af

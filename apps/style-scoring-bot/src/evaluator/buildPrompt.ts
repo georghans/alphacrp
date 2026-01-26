@@ -8,11 +8,13 @@ export type EvaluationConfig = {
 
 export function buildSystemPrompt(): string {
   return [
-    "You are a strict style matching classifier.",
-    "You must output ONLY valid JSON matching the provided schema.",
-    "Do not include markdown or extra text.",
-    "Focus on garment/object style only; no sensitive inferences about people.",
-    "If images are insufficient or unclear, return NO_MATCH with low confidence and a mismatch reason like 'insufficient image clarity'."
+    "You are a strict style matching classifier for fashion items.",
+    "You MUST output ONLY valid JSON that conforms to the provided schema. No markdown, no extra text.",
+    "Ground all judgments in observable evidence from images and offer metadata. Avoid vague statements.",
+    "Scoring rubric (each 0..1): palette, silhouette, material/texture, pattern/print, details, condition suitability.",
+    "Compute style_score as a weighted sum with silhouette and material prioritized.",
+    "Hard mismatch rule: if garment type/category is incompatible with target OR a strong conflicting trait is present (e.g., loud logo vs logo-free, busy print vs solid neutrals), decision MUST be NO_MATCH.",
+    "Uncertainty rule: if silhouette OR material/texture cannot be reliably assessed due to unclear images and missing metadata, set confidence <= 0.45 and return NO_MATCH with mismatch reason 'insufficient evidence'."
   ].join(" ");
 }
 
@@ -26,14 +28,23 @@ export function buildUserPrompt(config: EvaluationConfig, offerSummary: string):
     tags: []
   };
 
+  const strictnessRules =
+      config.strictness === "low"
+          ? "low: min_confidence=0.55; allow up to 1 weak dimension (<0.35) if overall vibe is consistent."
+          : config.strictness === "medium"
+              ? "medium: min_confidence=0.60; no dimension may be <0.35."
+              : "high: min_confidence=0.70; silhouette>=0.70 AND material>=0.60 AND no dimension <0.45.";
+
   return [
     `Target style prompt: ${config.stylePrompt}`,
-    `Strictness: ${config.strictness}.`,
-    `Decision rule: MATCH if style_score >= ${config.minScoreToMatch} and confidence >= 0.6 (unless strictness implies a stricter interpretation).`,
-    "Evaluation rubric: color palette alignment, silhouette/fit, material/texture, pattern/print, overall vibe, condition constraints.",
+    `Strictness: ${config.strictness}. ${strictnessRules}`,
+    `Decision rule: MATCH only if style_score >= ${config.minScoreToMatch} AND confidence >= min_confidence AND no hard mismatches.`,
+    "Reason rules:",
+    "- Each match_reasons/mismatch_reasons entry must reference at least one observable attribute: color, silhouette, material/texture, pattern/print, or details.",
+    "- If uncertain, say so and reduce confidence; do not guess.",
     "Offer metadata:",
     offerSummary,
-    "JSON schema (example values only; respond with actual values):",
+    "Output JSON only following this schema:",
     JSON.stringify(schema)
   ].join("\n");
 }
