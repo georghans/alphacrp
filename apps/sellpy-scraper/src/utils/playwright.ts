@@ -4,8 +4,6 @@ import { logger } from "./logger.js";
 
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 500;
-const LAUNCH_ARGS = ["--disable-gpu", "--no-zygote", "--single-process"];
-
 let browserInstance: Browser | null = null;
 let browserPromise: Promise<Browser> | null = null;
 
@@ -21,10 +19,7 @@ async function launchChromium(config: AppConfig) {
   let attempt = 0;
   while (true) {
     try {
-      return await chromium.launch({
-        headless: config.headless,
-        args: LAUNCH_ARGS
-      });
+      return await chromium.launch({ headless: config.headless });
     } catch (error) {
       if (!isEagain(error) || attempt >= MAX_RETRIES) {
         throw error;
@@ -37,6 +32,11 @@ async function launchChromium(config: AppConfig) {
   }
 }
 
+function resetBrowser() {
+  browserInstance = null;
+  browserPromise = null;
+}
+
 export async function getBrowser(config: AppConfig) {
   if (browserInstance && browserInstance.isConnected()) {
     return browserInstance;
@@ -46,13 +46,12 @@ export async function getBrowser(config: AppConfig) {
       .then((browser) => {
         browserInstance = browser;
         browser.on("disconnected", () => {
-          browserInstance = null;
-          browserPromise = null;
+          resetBrowser();
         });
         return browser;
       })
       .catch((error) => {
-        browserPromise = null;
+        resetBrowser();
         throw error;
       });
   }
@@ -60,8 +59,16 @@ export async function getBrowser(config: AppConfig) {
 }
 
 export async function createPage(config: AppConfig) {
-  const browser = await getBrowser(config);
-  const context = await browser.newContext({ userAgent: config.userAgent });
-  const page = await context.newPage();
-  return { page, context };
+  try {
+    const browser = await getBrowser(config);
+    const context = await browser.newContext({ userAgent: config.userAgent });
+    const page = await context.newPage();
+    return { page, context };
+  } catch (error) {
+    resetBrowser();
+    const browser = await getBrowser(config);
+    const context = await browser.newContext({ userAgent: config.userAgent });
+    const page = await context.newPage();
+    return { page, context };
+  }
 }

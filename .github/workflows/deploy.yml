@@ -98,7 +98,7 @@ jobs:
             BUCKET_FORCE_PATH_STYLE=false
             HEADLESS=true
             RATE_LIMIT_RPS=2
-            CONCURRENCY=3
+            CONCURRENCY=1
             USER_AGENT=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36
             MAX_PAGES=
             MAX_ITEMS=
@@ -107,7 +107,7 @@ jobs:
             SELLPY_SEARCH_QUERY_PARAM=query
             SELLPY_PAGE_PARAM=page
             SELLPY_LOCALE=en
-            SELLPY_USE_PLAYWRIGHT=auto
+            SELLPY_USE_PLAYWRIGHT=always
             SCRAPER_POLL_MS=120000
             SCRAPER_MAX_PAGES=
             SCRAPER_MAX_ITEMS=
