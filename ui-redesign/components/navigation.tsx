@@ -77,7 +77,7 @@ export function Navigation() {
                 </div>
                 <div>
                   <span className="block font-mono text-sm font-bold uppercase tracking-[0.15em] text-foreground">ALPHASCRAPE</span>
-                  <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">FASHION SEARCH ENGINE</span>
+                  <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">RESALE SEARCH AGENT</span>
                 </div>
               </SheetTitle>
             </SheetHeader>

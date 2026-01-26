@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState } from "react"
-import { Menu, X, Search, LayoutDashboard, Settings, HelpCircle } from "lucide-react"
+import { Menu, X, Search, LayoutDashboard, Settings, HelpCircle, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 const navItems = [
   { href: "/", label: "DASHBOARD", icon: LayoutDashboard },
   { href: "/searches", label: "SEARCHES", icon: Search },
+  { href: "/matches", label: "MATCHES", icon: CheckCircle2 },
   { href: "/settings", label: "SETTINGS", icon: Settings },
   { href: "/help", label: "HELP", icon: HelpCircle },
 ]
@@ -35,14 +36,14 @@ export function Navigation() {
           </div>
           <div className="hidden sm:block">
             <span className="font-mono text-sm font-bold uppercase tracking-[0.2em] text-foreground">ALPHASCRAPE</span>
-            <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">FASHION SEARCH ENGINE</span>
+            <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">RESALE SEARCH AGENT</span>
           </div>
         </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-0 md:flex">
           {navItems.map((item) => {
-            const isActive = pathname === item.href || 
+            const isActive = pathname === item.href ||
               (item.href !== "/" && pathname.startsWith(item.href))
             return (
               <Link
@@ -77,13 +78,13 @@ export function Navigation() {
                 </div>
                 <div>
                   <span className="block font-mono text-sm font-bold uppercase tracking-[0.15em] text-foreground">ALPHASCRAPE</span>
-                  <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">FASHION SEARCH ENGINE</span>
+                  <span className="block font-mono text-[10px] uppercase tracking-wider text-muted-foreground">RESALE SEARCH AGENT</span>
                 </div>
               </SheetTitle>
             </SheetHeader>
             <nav className="flex flex-col">
               {navItems.map((item, index) => {
-                const isActive = pathname === item.href || 
+                const isActive = pathname === item.href ||
                   (item.href !== "/" && pathname.startsWith(item.href))
                 return (
                   <Link

@@ -3,7 +3,7 @@
 import React, { useState } from "react"
 
 import Link from "next/link"
-import { ArrowLeft, Save, Trash2 } from "lucide-react"
+import { ArrowLeft, Save, Trash2, CheckCircle2 } from "lucide-react"
 import { useFormStatus } from "react-dom"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -93,6 +93,19 @@ export function SearchForm({ search, mode, createId }: SearchFormProps) {
         </div>
 
         <div className="flex items-center gap-3">
+          {mode === "edit" && search && (
+            <Button
+              type="button"
+              variant="outline"
+              asChild
+              className="gap-2 border-2 border-foreground bg-transparent font-mono text-xs uppercase tracking-wider hover:border-accent hover:bg-accent hover:text-accent-foreground"
+            >
+              <Link href={`/matches?filter=${search.id}`}>
+                <CheckCircle2 className="h-4 w-4" />
+                <span className="hidden sm:inline">SEE MATCHES</span>
+              </Link>
+            </Button>
+          )}
           {mode === "edit" && search && (
             <AlertDialog>
               <AlertDialogTrigger asChild>

@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "./client";
 import {
   offers,
@@ -7,11 +7,12 @@ import {
   searches
 } from "./schema";
 
-export async function listMatchingOffers(searchId?: string) {
+export async function listMatchingOffers(searchId?: string | string[]) {
   const db = getDb();
   const conditions = [eq(offerSearchEvaluations.decision, "MATCH")];
-  if (searchId) {
-    conditions.push(eq(offers.searchId, searchId));
+  const searchIds = Array.isArray(searchId) ? searchId : searchId ? [searchId] : [];
+  if (searchIds.length) {
+    conditions.push(inArray(offers.searchId, searchIds));
   }
 
   const rows = await db
