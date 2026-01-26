@@ -1,4 +1,3 @@
-import { chromium } from "playwright";
 import { extractOfferDetails } from "../extract/extractOfferDetails.js";
 import { extractImagesFromHtml } from "../extract/extractImages.js";
 import { sha256 } from "../utils/hash.js";
@@ -6,6 +5,7 @@ import { normalizeUrl } from "../utils/normalize.js";
 import type { AppConfig } from "../config.js";
 import type { HttpClient } from "../utils/http.js";
 import { logger } from "../utils/logger.js";
+import { createPage, getBrowser } from "../utils/playwright.js";
 import type { ImageRecord, OfferDetails } from "../db/upsertOffer.js";
 import path from "node:path";
 
@@ -37,11 +37,10 @@ async function fetchOfferHtmlWithPlaywright(
   config: AppConfig,
   url: string
 ): Promise<string> {
-  const browser = await chromium.launch({ headless: config.headless });
-  const page = await browser.newPage({ userAgent: config.userAgent });
+  const { page, context } = await createPage(config);
   await page.goto(url, { waitUntil: "networkidle" });
   const content = await page.content();
-  await browser.close();
+  await context.close();
   return content;
 }
 
@@ -50,8 +49,7 @@ async function captureImageScreenshots(
   offerUrl: string,
   maxCount: number
 ): Promise<string[]> {
-  const browser = await chromium.launch({ headless: config.headless });
-  const page = await browser.newPage({ userAgent: config.userAgent });
+  const { page, context } = await createPage(config);
   await page.goto(offerUrl, { waitUntil: "networkidle" });
 
   try {
@@ -108,7 +106,7 @@ async function captureImageScreenshots(
     results.push(`data:image/png;base64,${buffer.toString("base64")}`);
   }
 
-  await browser.close();
+  await context.close();
   return results;
 }
 
@@ -122,7 +120,7 @@ function inferMime(url: string, contentType?: string | null) {
 }
 
 async function fetchImageWithPlaywright(config: AppConfig, url: string) {
-  const browser = await chromium.launch({ headless: config.headless });
+  const browser = await getBrowser(config);
   const context = await browser.newContext({
     userAgent: config.userAgent,
     extraHTTPHeaders: {
@@ -138,12 +136,12 @@ async function fetchImageWithPlaywright(config: AppConfig, url: string) {
   }
   const response = await context.request.get(url);
   if (!response.ok()) {
-    await browser.close();
+    await context.close();
     throw new Error(`Playwright image fetch failed: ${response.status()} ${response.statusText()}`);
   }
   const buffer = await response.body();
   const contentType = response.headers()["content-type"];
-  await browser.close();
+  await context.close();
   return { buffer, contentType };
 }
 

@@ -1,7 +1,7 @@
-import { chromium } from "playwright";
 import { URL } from "node:url";
 import { extractSearchResults, type SearchOffer } from "../extract/extractSearchResults.js";
 import { logger } from "../utils/logger.js";
+import { createPage } from "../utils/playwright.js";
 import type { AppConfig } from "../config.js";
 import type { HttpClient } from "../utils/http.js";
 
@@ -68,8 +68,7 @@ async function crawlWithPlaywright(
   term: string,
   maxItems?: number
 ): Promise<SearchOffer[]> {
-  const browser = await chromium.launch({ headless: config.headless });
-  const page = await browser.newPage({ userAgent: config.userAgent });
+  const { page, context } = await createPage(config);
   const searchUrl = buildSearchUrl(config, term, 1);
   logger.info({ searchUrl }, "Playwright search navigation");
   await page.goto(searchUrl, { waitUntil: "networkidle" });
@@ -109,7 +108,7 @@ async function crawlWithPlaywright(
     await page.waitForTimeout(1000);
   }
 
-  await browser.close();
+  await context.close();
   return Array.from(offers.values()).slice(0, maxItems ?? Number.MAX_SAFE_INTEGER);
 }
 
