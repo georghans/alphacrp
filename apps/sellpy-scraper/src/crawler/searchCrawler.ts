@@ -26,11 +26,11 @@ function buildItemUrl(baseUrl: string, id: string) {
   return new URL(`/item/${id}`, baseUrl).toString();
 }
 
-async function collectAlgoliaOffers(
+function setupAlgoliaCollector(
   page: Awaited<ReturnType<typeof createPage>>["page"],
   config: AppConfig,
   maxItems?: number
-): Promise<SearchOffer[]> {
+) {
   const offers = new Map<string, SearchOffer>();
   const pending: Promise<void>[] = [];
 
@@ -71,11 +71,16 @@ async function collectAlgoliaOffers(
   };
 
   page.on("response", handler);
-  await page.waitForTimeout(4000);
-  page.off("response", handler);
-  await Promise.allSettled(pending);
-
-  return Array.from(offers.values()).slice(0, maxItems ?? Number.MAX_SAFE_INTEGER);
+  return {
+    getCurrentCount() {
+      return offers.size;
+    },
+    async finish() {
+      page.off("response", handler);
+      await Promise.allSettled(pending);
+      return Array.from(offers.values()).slice(0, maxItems ?? Number.MAX_SAFE_INTEGER);
+    }
+  };
 }
 
 async function fetchSearchPage(
@@ -127,15 +132,45 @@ async function crawlWithFetch(
 async function crawlWithPlaywright(
   config: AppConfig,
   term: string,
-  maxItems?: number
+  maxItems?: number,
+  maxPages?: number
 ): Promise<SearchOffer[]> {
   const { page, context } = await createPage(config);
-  const searchUrl = buildSearchUrl(config, term, 1);
-  logger.info({ searchUrl }, "Playwright search navigation");
-  const algoliaPromise = collectAlgoliaOffers(page, config, maxItems);
-  await page.goto(searchUrl, { waitUntil: "networkidle" });
+  const allOffers = new Map<string, SearchOffer>();
+  let currentPage = 1;
+  const effectiveMaxPages = maxPages ?? 20;
 
-  const algoliaOffers = await algoliaPromise;
+  while (currentPage <= effectiveMaxPages) {
+    const searchUrl = buildSearchUrl(config, term, currentPage);
+    logger.info({ searchUrl, page: currentPage }, "Playwright search navigation");
+
+    const collector = setupAlgoliaCollector(page, config);
+    await page.goto(searchUrl, { waitUntil: "networkidle" });
+    await page.waitForTimeout(3000);
+
+    const pageOffers = await collector.finish();
+    logger.info({ page: currentPage, newOffers: pageOffers.length, total: allOffers.size }, "Page results");
+
+    if (pageOffers.length === 0) {
+      logger.info({ page: currentPage }, "No more results, stopping pagination");
+      break;
+    }
+
+    for (const offer of pageOffers) {
+      if (!allOffers.has(offer.url)) {
+        allOffers.set(offer.url, offer);
+      }
+    }
+
+    if (maxItems && allOffers.size >= maxItems) {
+      logger.info({ collected: allOffers.size, target: maxItems }, "Reached target items");
+      break;
+    }
+
+    currentPage++;
+  }
+
+  const algoliaOffers = Array.from(allOffers.values()).slice(0, maxItems ?? Number.MAX_SAFE_INTEGER);
   if (algoliaOffers.length > 0) {
     await context.close();
     return algoliaOffers;
@@ -188,7 +223,7 @@ export async function crawlSearch(
   maxItems?: number
 ): Promise<SearchOffer[]> {
   if (config.usePlaywright === "always") {
-    return crawlWithPlaywright(config, term, maxItems);
+    return crawlWithPlaywright(config, term, maxItems, maxPages);
   }
 
   const fetched = await crawlWithFetch(http, config, term, maxPages, maxItems);
@@ -197,5 +232,5 @@ export async function crawlSearch(
   }
 
   logger.info("Fetch-based search returned no offers; falling back to Playwright.");
-  return crawlWithPlaywright(config, term, maxItems);
+  return crawlWithPlaywright(config, term, maxItems, maxPages);
 }
