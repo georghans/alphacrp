@@ -32,52 +32,44 @@ function setupAlgoliaCollector(
   maxItems?: number
 ) {
   const offers = new Map<string, SearchOffer>();
-  const pending: Promise<void>[] = [];
+  let algoliaDetected = false;
 
   const handler = (response: { url: () => string; request: () => { method: () => string }; json: () => Promise<unknown> }) => {
     const url = response.url();
-    if (!url.includes("algolia.net/1/indexes")) return;
+    if (!url.includes("algolia.net/1/indexes") && !url.includes("algolianet.com/1/indexes")) return;
     if (response.request().method() !== "POST") return;
-
-    pending.push(
-      response
-        .json()
-        .then((payload) => {
-          const results = (payload as { results?: unknown[] } | null)?.results;
-          if (!Array.isArray(results)) return;
-          for (const result of results) {
-            const hits = (result as { hits?: unknown[] } | null)?.hits;
-            if (!Array.isArray(hits)) continue;
-            for (const rawHit of hits) {
-              const hit = rawHit as AlgoliaHit;
-              const id = hit.objectID ?? hit.itemIO;
-              if (!id) continue;
-              const url = buildItemUrl(config.baseUrl, id);
-              if (!offers.has(url)) {
-                offers.set(url, {
-                  url,
-                  nativeExternalId: String(id),
-                  raw: hit
-                });
-              }
-              if (maxItems && offers.size >= maxItems) return;
-            }
-          }
-        })
-        .catch(() => {
-          // ignore parse errors
-        })
-    );
+    algoliaDetected = true;
+    logger.info({ url: url.substring(0, 120) }, "Algolia response captured");
   };
 
   page.on("response", handler);
   return {
     getCurrentCount() {
-      return offers.size;
+      return algoliaDetected ? 1 : 0;
     },
     async finish() {
       page.off("response", handler);
-      await Promise.allSettled(pending);
+
+      if (!algoliaDetected) return [];
+
+      // Extract item IDs from the DOM instead of parsing Algolia response bodies
+      const itemUrls = await page.$$eval("a[href]", (anchors) =>
+        anchors
+          .map((a) => (a as HTMLAnchorElement).href)
+          .filter((href) => /\/item\//i.test(href))
+      );
+
+      for (const itemUrl of itemUrls) {
+        if (offers.has(itemUrl)) continue;
+        const match = itemUrl.match(/\/item\/([^/?#]+)/);
+        const id = match?.[1];
+        offers.set(itemUrl, {
+          url: itemUrl,
+          nativeExternalId: id ? String(id) : undefined
+        });
+        if (maxItems && offers.size >= maxItems) break;
+      }
+
       return Array.from(offers.values()).slice(0, maxItems ?? Number.MAX_SAFE_INTEGER);
     }
   };
@@ -129,13 +121,27 @@ async function crawlWithFetch(
   return Array.from(deduped.values()).slice(0, maxItems ?? Number.MAX_SAFE_INTEGER);
 }
 
+async function crawlOnePage(
+  config: AppConfig,
+  searchUrl: string
+): Promise<SearchOffer[]> {
+  const { page, context } = await createPage(config);
+  try {
+    const collector = setupAlgoliaCollector(page, config);
+    await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 180000 });
+    await page.waitForTimeout(3000);
+    return await collector.finish();
+  } finally {
+    await context.close().catch(() => undefined);
+  }
+}
+
 async function crawlWithPlaywright(
   config: AppConfig,
   term: string,
   maxItems?: number,
   maxPages?: number
 ): Promise<SearchOffer[]> {
-  const { page, context } = await createPage(config);
   const allOffers = new Map<string, SearchOffer>();
   let currentPage = 1;
   const effectiveMaxPages = maxPages ?? 20;
@@ -144,11 +150,7 @@ async function crawlWithPlaywright(
     const searchUrl = buildSearchUrl(config, term, currentPage);
     logger.info({ searchUrl, page: currentPage }, "Playwright search navigation");
 
-    const collector = setupAlgoliaCollector(page, config);
-    await page.goto(searchUrl, { waitUntil: "networkidle" });
-    await page.waitForTimeout(3000);
-
-    const pageOffers = await collector.finish();
+    const pageOffers = await crawlOnePage(config, searchUrl);
     logger.info({ page: currentPage, newOffers: pageOffers.length, total: allOffers.size }, "Page results");
 
     if (pageOffers.length === 0) {
@@ -172,9 +174,13 @@ async function crawlWithPlaywright(
 
   const algoliaOffers = Array.from(allOffers.values()).slice(0, maxItems ?? Number.MAX_SAFE_INTEGER);
   if (algoliaOffers.length > 0) {
-    await context.close();
     return algoliaOffers;
   }
+
+  // Fallback to DOM scraping
+  const { page, context } = await createPage(config);
+  const searchUrl = buildSearchUrl(config, term, 1);
+  await page.goto(searchUrl, { waitUntil: "networkidle", timeout: 180000 });
 
   const offers = new Map<string, SearchOffer>();
   let previousCount = 0;

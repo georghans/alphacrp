@@ -19,7 +19,15 @@ async function launchChromium(config: AppConfig) {
   let attempt = 0;
   while (true) {
     try {
-      return await chromium.launch({ headless: config.headless });
+      return await chromium.launch({
+        headless: config.headless,
+        args: [
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--no-sandbox",
+          "--disable-setuid-sandbox"
+        ]
+      });
     } catch (error) {
       if (!isEagain(error) || attempt >= MAX_RETRIES) {
         throw error;
@@ -59,16 +67,23 @@ export async function getBrowser(config: AppConfig) {
 }
 
 export async function createPage(config: AppConfig) {
-  try {
-    const browser = await getBrowser(config);
-    const context = await browser.newContext({ userAgent: config.userAgent });
-    const page = await context.newPage();
-    return { page, context };
-  } catch (error) {
-    resetBrowser();
-    const browser = await getBrowser(config);
-    const context = await browser.newContext({ userAgent: config.userAgent });
-    const page = await context.newPage();
-    return { page, context };
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    let context: Awaited<ReturnType<Browser["newContext"]>> | null = null;
+    try {
+      const browser = await getBrowser(config);
+      context = await browser.newContext({ userAgent: config.userAgent });
+      const page = await context.newPage();
+      page.setDefaultNavigationTimeout(90000);
+      return { page, context };
+    } catch (error) {
+      lastError = error;
+      if (context) {
+        await context.close().catch(() => undefined);
+      }
+      resetBrowser();
+    }
   }
+
+  throw lastError;
 }
