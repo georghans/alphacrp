@@ -1,9 +1,7 @@
 import { Command } from "commander";
 import pLimit from "p-limit";
 import { loadConfig } from "./config.js";
-import { createHttpClient } from "./utils/http.js";
 import { logger } from "./utils/logger.js";
-import { crawlOffer } from "./crawler/offerCrawler.js";
 import { extractAlgoliaOffer, isAlgoliaHit } from "./extract/extractAlgoliaOffer.js";
 import { createDbClient } from "./db/client.js";
 import { upsertOffer } from "./db/upsertOffer.js";
@@ -19,26 +17,14 @@ program
   .name("sellpy-scrape-offers")
   .description("Scrape pending discovered offers from the queue")
   .option("--batch-size <number>", "Number of offers to claim per batch", (v) => Number(v), 20)
-  .option("--headless <boolean>", "Override headless setting", (v) => v === "true")
   .parse(process.argv);
 
 const options = program.opts<{
   batchSize: number;
-  headless?: boolean;
 }>();
 
 async function main() {
-  const baseConfig = loadConfig();
-  const config = {
-    ...baseConfig,
-    headless: options.headless ?? baseConfig.headless
-  };
-
-  const http = createHttpClient({
-    userAgent: config.userAgent,
-    rateLimitRps: config.rateLimitRps
-  });
-
+  const config = loadConfig();
   const { db, pool } = createDbClient(config.databaseUrl);
 
   logger.info({ batchSize: options.batchSize }, "Claiming pending offers");
@@ -62,36 +48,22 @@ async function main() {
     claimed.map((row) =>
       limit(async () => {
         try {
-          let details: Awaited<ReturnType<typeof crawlOffer>>["offer"];
-          let images: Awaited<ReturnType<typeof crawlOffer>>["images"];
+          if (!isAlgoliaHit(row.rawMetadata)) {
+            throw new Error("Missing Algolia metadata — cannot extract offer");
+          }
 
-          const algoliaResult = isAlgoliaHit(row.rawMetadata)
-            ? extractAlgoliaOffer(row.rawMetadata, row.searchTerm, row.url, row.externalId ?? undefined)
-            : null;
-
-          if (algoliaResult) {
-            details = algoliaResult.offer;
-            images = algoliaResult.images;
-            logger.info({ url: row.url }, "Extracted offer from Algolia metadata");
-          } else {
-            const crawled = await crawlOffer(
-              http,
-              config,
-              row.searchTerm,
-              row.url,
-              row.externalId ?? undefined
-            );
-            details = crawled.offer;
-            images = crawled.images;
+          const extracted = extractAlgoliaOffer(row.rawMetadata, row.searchTerm, row.url, row.externalId ?? undefined);
+          if (!extracted) {
+            throw new Error("Failed to extract offer from Algolia metadata");
           }
 
           const result = await upsertOffer(
             db,
             {
-              ...details,
+              ...extracted.offer,
               searchId: row.searchId
             },
-            images
+            extracted.images
           );
 
           await markScraped(db, row.id);

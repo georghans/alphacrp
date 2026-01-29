@@ -44,7 +44,6 @@ services:
       - ./.env.prod
     volumes:
       - worker_data:/data
-    shm_size: "1gb"
     depends_on:
       - postgres
 

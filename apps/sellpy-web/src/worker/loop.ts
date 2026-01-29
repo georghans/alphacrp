@@ -3,7 +3,6 @@ import { createRequire } from "node:module";
 import { loadConfig as loadScraperConfig } from "../../../../apps/sellpy-scraper/src/config";
 import { createHttpClient } from "../../../../apps/sellpy-scraper/src/utils/http";
 import { crawlSearch } from "../../../../apps/sellpy-scraper/src/crawler/searchCrawler";
-import { crawlOffer } from "../../../../apps/sellpy-scraper/src/crawler/offerCrawler";
 import { extractAlgoliaOffer, isAlgoliaHit } from "../../../../apps/sellpy-scraper/src/extract/extractAlgoliaOffer";
 import { upsertOffer } from "../../../../apps/sellpy-scraper/src/db/upsertOffer";
 import { upsertDiscoveredOffer } from "../../../../apps/sellpy-scraper/src/db/upsertDiscoveredOffer";
@@ -100,7 +99,7 @@ async function runDiscoveryLoop() {
               externalId: offer.nativeExternalId ?? null,
               searchTerm: term,
               url: offer.url,
-              rawMetadata: (offer.raw as Record<string, unknown>) ?? (offer.metadata as Record<string, unknown>) ?? {}
+              rawMetadata: (offer.raw as Record<string, unknown>) ?? {}
             });
           }
 
@@ -118,10 +117,6 @@ async function runDiscoveryLoop() {
 async function runOfferScraperLoop() {
   const config = loadScraperConfig();
   const { db, pool } = createDbClient(config.databaseUrl);
-  const http = createHttpClient({
-    userAgent: config.userAgent,
-    rateLimitRps: config.rateLimitRps
-  });
 
   const pollMs = Number(process.env.OFFER_SCRAPER_POLL_MS ?? 60000);
   const batchSize = Number(process.env.OFFER_SCRAPER_BATCH_SIZE ?? 20);
@@ -138,35 +133,22 @@ async function runOfferScraperLoop() {
           claimed.map((row) =>
             limit(async () => {
               try {
-                let details: Awaited<ReturnType<typeof crawlOffer>>["offer"];
-                let images: Awaited<ReturnType<typeof crawlOffer>>["images"];
+                if (!isAlgoliaHit(row.rawMetadata)) {
+                  throw new Error("Missing Algolia metadata — cannot extract offer");
+                }
 
-                const algoliaResult = isAlgoliaHit(row.rawMetadata)
-                  ? extractAlgoliaOffer(row.rawMetadata, row.searchTerm, row.url, row.externalId ?? undefined)
-                  : null;
-
-                if (algoliaResult) {
-                  details = algoliaResult.offer;
-                  images = algoliaResult.images;
-                } else {
-                  const crawled = await crawlOffer(
-                    http,
-                    config,
-                    row.searchTerm,
-                    row.url,
-                    row.externalId ?? undefined
-                  );
-                  details = crawled.offer;
-                  images = crawled.images;
+                const extracted = extractAlgoliaOffer(row.rawMetadata, row.searchTerm, row.url, row.externalId ?? undefined);
+                if (!extracted) {
+                  throw new Error("Failed to extract offer from Algolia metadata");
                 }
 
                 await upsertOffer(
                   db,
                   {
-                    ...details,
+                    ...extracted.offer,
                     searchId: row.searchId
                   },
-                  images
+                  extracted.images
                 );
 
                 await markScraped(db, row.id);

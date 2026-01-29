@@ -159,7 +159,7 @@ interface Search {
   id: string                    // UUID
   title: string                 // e.g., "2000s Preppy"
   prompt: string                // Detailed aesthetic description
-  searchTerms: string[]         // Keywords for scraper filtering
+  searchTerms: string[]         // Keywords for Algolia search
   images: string[]              // 1-5 example images (URLs)
   isActive: boolean             // Toggle for active/inactive
   createdAt: Date
@@ -186,7 +186,7 @@ interface Search {
 ### Create/Edit Form
 - **Title Input** - Search name
 - **Style Description** - Detailed aesthetic explanation (textarea)
-- **Search Terms** - Comma-separated keywords for scraper
+- **Search Terms** - Comma-separated keywords for Algolia search
 - **Image Upload** - Drag-and-drop or click to upload 1-5 images
   - Preview thumbnails
   - Remove individual images
@@ -279,8 +279,8 @@ interface Search {
 - User authentication
 - Multi-user support
 
-### Scraper Integration
-- Connect to actual resale platform APIs (eBay, Depop, Grailed, Vinted)
+### Platform Integration
+- Expand to additional resale platform APIs (eBay, Depop, Grailed, Vinted)
 - Run searches on schedule
 - Store and display results
 - Notification system for new matches

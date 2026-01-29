@@ -16,7 +16,6 @@ program
   .option("--search-id <id>", "Search ID to attach offers to")
   .option("--max-pages <number>", "Maximum pages to crawl", (v) => Number(v))
   .option("--max-items <number>", "Maximum items to crawl", (v) => Number(v))
-  .option("--headless <boolean>", "Override headless setting", (v) => v === "true")
   .parse(process.argv);
 
 const options = program.opts<{
@@ -24,7 +23,6 @@ const options = program.opts<{
   searchId?: string;
   maxPages?: number;
   maxItems?: number;
-  headless?: boolean;
 }>();
 
 async function main() {
@@ -32,8 +30,7 @@ async function main() {
   const config = {
     ...baseConfig,
     maxPages: options.maxPages ?? baseConfig.maxPages,
-    maxItems: options.maxItems ?? baseConfig.maxItems,
-    headless: options.headless ?? baseConfig.headless
+    maxItems: options.maxItems ?? baseConfig.maxItems
   };
 
   const http = createHttpClient({
@@ -65,7 +62,7 @@ async function main() {
       externalId: offer.nativeExternalId ?? null,
       searchTerm: options.term,
       url: offer.url,
-      rawMetadata: (offer.raw as Record<string, unknown>) ?? (offer.metadata as Record<string, unknown>) ?? {}
+      rawMetadata: (offer.raw as Record<string, unknown>) ?? {}
     });
 
     if (result.isNew) newCount += 1;
