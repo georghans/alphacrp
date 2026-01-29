@@ -4,6 +4,7 @@ import { loadConfig as loadScraperConfig } from "../../../../apps/sellpy-scraper
 import { createHttpClient } from "../../../../apps/sellpy-scraper/src/utils/http";
 import { crawlSearch } from "../../../../apps/sellpy-scraper/src/crawler/searchCrawler";
 import { crawlOffer } from "../../../../apps/sellpy-scraper/src/crawler/offerCrawler";
+import { extractAlgoliaOffer, isAlgoliaHit } from "../../../../apps/sellpy-scraper/src/extract/extractAlgoliaOffer";
 import { upsertOffer } from "../../../../apps/sellpy-scraper/src/db/upsertOffer";
 import { upsertDiscoveredOffer } from "../../../../apps/sellpy-scraper/src/db/upsertDiscoveredOffer";
 import {
@@ -99,7 +100,7 @@ async function runDiscoveryLoop() {
               externalId: offer.nativeExternalId ?? null,
               searchTerm: term,
               url: offer.url,
-              rawMetadata: (offer.metadata as Record<string, unknown>) ?? {}
+              rawMetadata: (offer.raw as Record<string, unknown>) ?? (offer.metadata as Record<string, unknown>) ?? {}
             });
           }
 
@@ -137,13 +138,27 @@ async function runOfferScraperLoop() {
           claimed.map((row) =>
             limit(async () => {
               try {
-                const { offer: details, images } = await crawlOffer(
-                  http,
-                  config,
-                  row.searchTerm,
-                  row.url,
-                  row.externalId ?? undefined
-                );
+                let details: Awaited<ReturnType<typeof crawlOffer>>["offer"];
+                let images: Awaited<ReturnType<typeof crawlOffer>>["images"];
+
+                const algoliaResult = isAlgoliaHit(row.rawMetadata)
+                  ? extractAlgoliaOffer(row.rawMetadata, row.searchTerm, row.url, row.externalId ?? undefined)
+                  : null;
+
+                if (algoliaResult) {
+                  details = algoliaResult.offer;
+                  images = algoliaResult.images;
+                } else {
+                  const crawled = await crawlOffer(
+                    http,
+                    config,
+                    row.searchTerm,
+                    row.url,
+                    row.externalId ?? undefined
+                  );
+                  details = crawled.offer;
+                  images = crawled.images;
+                }
 
                 await upsertOffer(
                   db,

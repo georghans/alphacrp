@@ -4,6 +4,7 @@ import { loadConfig } from "./config.js";
 import { createHttpClient } from "./utils/http.js";
 import { logger } from "./utils/logger.js";
 import { crawlOffer } from "./crawler/offerCrawler.js";
+import { extractAlgoliaOffer, isAlgoliaHit } from "./extract/extractAlgoliaOffer.js";
 import { createDbClient } from "./db/client.js";
 import { upsertOffer } from "./db/upsertOffer.js";
 import {
@@ -61,13 +62,28 @@ async function main() {
     claimed.map((row) =>
       limit(async () => {
         try {
-          const { offer: details, images } = await crawlOffer(
-            http,
-            config,
-            row.searchTerm,
-            row.url,
-            row.externalId ?? undefined
-          );
+          let details: Awaited<ReturnType<typeof crawlOffer>>["offer"];
+          let images: Awaited<ReturnType<typeof crawlOffer>>["images"];
+
+          const algoliaResult = isAlgoliaHit(row.rawMetadata)
+            ? extractAlgoliaOffer(row.rawMetadata, row.searchTerm, row.url, row.externalId ?? undefined)
+            : null;
+
+          if (algoliaResult) {
+            details = algoliaResult.offer;
+            images = algoliaResult.images;
+            logger.info({ url: row.url }, "Extracted offer from Algolia metadata");
+          } else {
+            const crawled = await crawlOffer(
+              http,
+              config,
+              row.searchTerm,
+              row.url,
+              row.externalId ?? undefined
+            );
+            details = crawled.offer;
+            images = crawled.images;
+          }
 
           const result = await upsertOffer(
             db,

@@ -33,6 +33,7 @@ function setupAlgoliaCollector(
 ) {
   const offers = new Map<string, SearchOffer>();
   let algoliaDetected = false;
+  const jsonPromises: Promise<unknown>[] = [];
 
   const handler = (response: { url: () => string; request: () => { method: () => string }; json: () => Promise<unknown> }) => {
     const url = response.url();
@@ -40,6 +41,7 @@ function setupAlgoliaCollector(
     if (response.request().method() !== "POST") return;
     algoliaDetected = true;
     logger.info({ url: url.substring(0, 120) }, "Algolia response captured");
+    jsonPromises.push(response.json().catch(() => null));
   };
 
   page.on("response", handler);
@@ -52,22 +54,57 @@ function setupAlgoliaCollector(
 
       if (!algoliaDetected) return [];
 
-      // Extract item IDs from the DOM instead of parsing Algolia response bodies
-      const itemUrls = await page.$$eval("a[href]", (anchors) =>
-        anchors
-          .map((a) => (a as HTMLAnchorElement).href)
-          .filter((href) => /\/item\//i.test(href))
-      );
+      // Parse Algolia JSON response bodies and extract hits with full raw data
+      const bodies = await Promise.all(jsonPromises);
+      for (const body of bodies) {
+        if (!body || typeof body !== "object") continue;
+        const results = (body as Record<string, unknown>).results;
+        const resultList = Array.isArray(results) ? results : [body];
 
-      for (const itemUrl of itemUrls) {
-        if (offers.has(itemUrl)) continue;
-        const match = itemUrl.match(/\/item\/([^/?#]+)/);
-        const id = match?.[1];
-        offers.set(itemUrl, {
-          url: itemUrl,
-          nativeExternalId: id ? String(id) : undefined
-        });
+        for (const result of resultList) {
+          if (!result || typeof result !== "object") continue;
+          const hits = (result as Record<string, unknown>).hits;
+          if (!Array.isArray(hits)) continue;
+
+          for (const hit of hits) {
+            if (!hit || typeof hit !== "object") continue;
+            const algoliaHit = hit as AlgoliaHit;
+            const id = algoliaHit.objectID ?? algoliaHit.itemIO;
+            if (!id) continue;
+
+            const itemUrl = buildItemUrl(config.baseUrl, String(id));
+            if (offers.has(itemUrl)) continue;
+
+            offers.set(itemUrl, {
+              url: itemUrl,
+              nativeExternalId: String(id),
+              raw: algoliaHit
+            });
+            if (maxItems && offers.size >= maxItems) break;
+          }
+          if (maxItems && offers.size >= maxItems) break;
+        }
         if (maxItems && offers.size >= maxItems) break;
+      }
+
+      // Fallback to DOM scraping if JSON parsing yielded nothing
+      if (offers.size === 0) {
+        const itemUrls = await page.$$eval("a[href]", (anchors) =>
+          anchors
+            .map((a) => (a as HTMLAnchorElement).href)
+            .filter((href) => /\/item\//i.test(href))
+        );
+
+        for (const itemUrl of itemUrls) {
+          if (offers.has(itemUrl)) continue;
+          const match = itemUrl.match(/\/item\/([^/?#]+)/);
+          const id = match?.[1];
+          offers.set(itemUrl, {
+            url: itemUrl,
+            nativeExternalId: id ? String(id) : undefined
+          });
+          if (maxItems && offers.size >= maxItems) break;
+        }
       }
 
       return Array.from(offers.values()).slice(0, maxItems ?? Number.MAX_SAFE_INTEGER);

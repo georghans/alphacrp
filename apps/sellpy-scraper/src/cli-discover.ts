@@ -65,7 +65,7 @@ async function main() {
       externalId: offer.nativeExternalId ?? null,
       searchTerm: options.term,
       url: offer.url,
-      rawMetadata: (offer.metadata as Record<string, unknown>) ?? {}
+      rawMetadata: (offer.raw as Record<string, unknown>) ?? (offer.metadata as Record<string, unknown>) ?? {}
     });
 
     if (result.isNew) newCount += 1;
