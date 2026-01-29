@@ -2,10 +2,18 @@
 
 ## Overview
 This repo powers Sellpy offer discovery, scoring, and a Next.js UI. It includes:
-- Scraper (`apps/sellpy-scraper`)
+- Scraper (`apps/sellpy-scraper`) -- discovery + offer scraping via a `discovered_offers` queue
 - Style scoring bot (`apps/style-scoring-bot`)
-- Web UI (`apps/sellpy-web`)
+- Web UI + worker (`apps/sellpy-web`)
 - Shared DB schema (`packages/shared-db`)
+
+## Architecture
+The scraper pipeline is split into two decoupled stages connected by a `discovered_offers` DB queue table:
+1. **Discovery** -- `crawlSearch()` finds offer URLs and writes them to `discovered_offers` (status: `pending`).
+2. **Offer Scraping** -- claims pending rows, runs `crawlOffer()` + `upsertOffer()`, marks rows as `scraped` (or `failed` after 3 retries).
+3. **Matching** -- evaluates offers against search prompts + example images using OpenRouter.
+
+The worker loop (`apps/sellpy-web`) runs all three stages concurrently.
 
 ## Local Dev
 - Copy `.env.example` to `.env` and fill in values (never commit `.env`).
@@ -13,9 +21,33 @@ This repo powers Sellpy offer discovery, scoring, and a Next.js UI. It includes:
 - Run migrations: `cd apps/sellpy-scraper && npm run migrate`
 - Reference image uploads require S3-compatible storage credentials (see `.env.example`).
 
-## Local Prod-Like Stack (Docker)
-Use the prod-style compose locally with local images and an env file.
+## Scraper Commands
+```bash
+cd apps/sellpy-scraper
 
+# Discovery only (writes to discovered_offers queue)
+npm run discover -- -t "jacket" --max-items 20 --max-pages 2
+
+# Scrape pending offers (reads from queue, writes to offers table)
+npm run scrape-offers -- --batch-size 20
+
+# Legacy all-in-one (discover + scrape in one pass)
+npm run dev -- -t "jacket" --max-items 20
+```
+
+## Other Commands
+```bash
+# Web UI
+cd apps/sellpy-web && npm run dev
+
+# Worker loop (discovery + offer scraping + matching)
+cd apps/sellpy-web && npm run worker
+
+# Matcher CLI
+cd apps/style-scoring-bot && npm run dev -- eval --search <searchId> --max-offers 10
+```
+
+## Local Prod-Like Stack (Docker)
 1) Create `deploy/.env.prod.local` (do not commit). It should include:
    - `DATABASE_URL=postgresql://user:password@postgres:5432/postgres`
    - `OPENROUTER_API_KEY=...` (required for scoring)
@@ -34,41 +66,23 @@ Use the prod-style compose locally with local images and an env file.
 - **Compose**: `/opt/alphacrp/deploy/docker-compose.prod.yml`
 - **Env**: `/opt/alphacrp/deploy/.env.prod`
 - **Caddy**: `/opt/alphacrp/deploy/Caddyfile`
-
-### HTTP/HTTPS
-- `http://46.62.233.55` works (IP HTTP).
 - Use the domain for HTTPS (public CAs do not issue certs for bare IPs).
 
-### Logs (easy access)
-- Tail logs via SSH:
-  - `ssh root@46.62.233.55 'cd /opt/alphacrp/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f --timestamps --tail=200 web worker'`
-- Helper script:
-  - `SSH_HOST=root@46.62.233.55 ./scripts/remote-logs.sh web worker`
-- Log rotation is enabled in compose (`driver: local`, `max-size: 50m`, `max-file: 5`).
+### Logs
+```bash
+ssh root@46.62.233.55 'cd /opt/alphacrp/deploy && docker compose --env-file .env.prod -f docker-compose.prod.yml logs -f --timestamps --tail=200 web worker'
+# or
+SSH_HOST=root@46.62.233.55 ./scripts/remote-logs.sh web worker
+```
 
 ### Database Access (SSH tunnel)
-- Manual tunnel:
-  - `ssh -L 55432:127.0.0.1:5432 root@46.62.233.55`
-- Connect locally to `127.0.0.1:55432` using creds from `/opt/alphacrp/deploy/.env.prod`.
-
-### IntelliJ SSH Tunnel (gotcha)
-When using IntelliJ’s built-in SSH tunnel:
-- **General tab** host/port should be the **remote DB** (`127.0.0.1:5432`).
-- **SSH/SSL tab** sets the local tunnel port (e.g. `55432`) and SSH host.
+```bash
+ssh -L 55432:127.0.0.1:5432 root@46.62.233.55
+# Connect locally to 127.0.0.1:55432 using creds from .env.prod
+```
 
 ## Deploying Updates
-- Deployment is handled by GitHub Actions on push.
-- Configure GitHub Actions **Secrets** (not committed in repo). Required secrets:
-  - `SSH_HOST`, `SSH_USER`, `SSH_KEY`, `SSH_KEY_PASSPHRASE`
-  - `DOMAIN`, `LETSENCRYPT_EMAIL`
-  - `POSTGRES_USER`, `POSTGRES_DB`, `POSTGRES_PASSWORD`, `DATABASE_URL`
-  - `APP_USERNAME`, `APP_PASSWORD`
-  - `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `GHCR_USERNAME`, `GHCR_TOKEN` (optional)
-  - `BUCKET_ENDPOINT`, `BUCKET_REGION`, `BUCKET_NAME`, `BUCKET_KEY`, `BUCKET_SECRET`
-  - Optional: `BUCKET_PUBLIC_BASE_URL`, `BUCKET_FORCE_PATH_STYLE`
-- The workflow writes `/opt/alphacrp/deploy/.env.prod` on the server from secrets.
+Deployment is handled by GitHub Actions on push. Configure GitHub Actions **Secrets** (see AGENTS.md for full list).
 
 ## Reference Image Storage
-- Reference images are uploaded from the web UI to an S3-compatible bucket and stored as public URLs in `searches.example_images`.
-- Upload endpoint: `POST /api/reference-images` (used by the UI).
-- Matcher consumes the stored URLs directly when building prompts.
+Reference images are uploaded from the web UI to an S3-compatible bucket and stored as public URLs in `searches.example_images`. The matcher consumes these URLs directly when building prompts.

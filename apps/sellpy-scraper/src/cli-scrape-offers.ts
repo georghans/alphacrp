@@ -3,29 +3,26 @@ import pLimit from "p-limit";
 import { loadConfig } from "./config.js";
 import { createHttpClient } from "./utils/http.js";
 import { logger } from "./utils/logger.js";
-import { crawlSearch } from "./crawler/searchCrawler.js";
 import { crawlOffer } from "./crawler/offerCrawler.js";
 import { createDbClient } from "./db/client.js";
 import { upsertOffer } from "./db/upsertOffer.js";
-import { resolveSearchId } from "./db/resolveSearchId.js";
+import {
+  claimPendingOffers,
+  markScraped,
+  markFailed
+} from "./db/discoveredOfferQueue.js";
 
 const program = new Command();
 
 program
-  .name("sellpy-scraper")
-  .description("Scrape Sellpy offers into PostgreSQL")
-  .requiredOption("-t, --term <term>", "Search term")
-  .option("--search-id <id>", "Search ID to attach offers to")
-  .option("--max-pages <number>", "Maximum pages to crawl", (v) => Number(v))
-  .option("--max-items <number>", "Maximum items to crawl", (v) => Number(v))
+  .name("sellpy-scrape-offers")
+  .description("Scrape pending discovered offers from the queue")
+  .option("--batch-size <number>", "Number of offers to claim per batch", (v) => Number(v), 20)
   .option("--headless <boolean>", "Override headless setting", (v) => v === "true")
   .parse(process.argv);
 
 const options = program.opts<{
-  term: string;
-  searchId?: string;
-  maxPages?: number;
-  maxItems?: number;
+  batchSize: number;
   headless?: boolean;
 }>();
 
@@ -33,8 +30,6 @@ async function main() {
   const baseConfig = loadConfig();
   const config = {
     ...baseConfig,
-    maxPages: options.maxPages ?? baseConfig.maxPages,
-    maxItems: options.maxItems ?? baseConfig.maxItems,
     headless: options.headless ?? baseConfig.headless
   };
 
@@ -44,52 +39,54 @@ async function main() {
   });
 
   const { db, pool } = createDbClient(config.databaseUrl);
-  const searchId = await resolveSearchId(db, options.term, options.searchId);
 
-  logger.info({ term: options.term, searchId }, "Starting search crawl");
-  const searchOffers = await crawlSearch(
-    http,
-    config,
-    options.term,
-    config.maxPages,
-    config.maxItems
-  );
+  logger.info({ batchSize: options.batchSize }, "Claiming pending offers");
+  const claimed = await claimPendingOffers(db, options.batchSize);
 
-  logger.info({ count: searchOffers.length }, "Discovered offers");
+  if (claimed.length === 0) {
+    logger.info("No pending offers to scrape");
+    await pool.end();
+    return;
+  }
+
+  logger.info({ count: claimed.length }, "Claimed offers for scraping");
 
   const limit = pLimit(config.concurrency);
-
-  let processed = 0;
+  let scraped = 0;
   let inserted = 0;
   let updated = 0;
   let errors = 0;
 
   await Promise.all(
-    searchOffers.map((offer) =>
+    claimed.map((row) =>
       limit(async () => {
         try {
           const { offer: details, images } = await crawlOffer(
             http,
             config,
-            options.term,
-            offer.url,
-            offer.nativeExternalId
+            row.searchTerm,
+            row.url,
+            row.externalId ?? undefined
           );
 
           const result = await upsertOffer(
             db,
             {
               ...details,
-              searchId
+              searchId: row.searchId
             },
             images
           );
+
+          await markScraped(db, row.id);
+          scraped += 1;
           if (result.isNew) inserted += 1;
           else updated += 1;
-          processed += 1;
         } catch (error) {
           errors += 1;
-          logger.error({ error, url: offer.url }, "Failed to crawl offer");
+          const message = error instanceof Error ? error.message : String(error);
+          await markFailed(db, row.id, message);
+          logger.error({ error, url: row.url }, "Failed to scrape offer");
         }
       })
     )
@@ -99,13 +96,13 @@ async function main() {
 
   logger.info(
     {
-      discovered: searchOffers.length,
-      processed,
+      claimed: claimed.length,
+      scraped,
       inserted,
       updated,
       errors
     },
-    "Scrape summary"
+    "Offer scrape summary"
   );
 }
 

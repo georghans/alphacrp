@@ -5,6 +5,12 @@ import { createHttpClient } from "../../../../apps/sellpy-scraper/src/utils/http
 import { crawlSearch } from "../../../../apps/sellpy-scraper/src/crawler/searchCrawler";
 import { crawlOffer } from "../../../../apps/sellpy-scraper/src/crawler/offerCrawler";
 import { upsertOffer } from "../../../../apps/sellpy-scraper/src/db/upsertOffer";
+import { upsertDiscoveredOffer } from "../../../../apps/sellpy-scraper/src/db/upsertDiscoveredOffer";
+import {
+  claimPendingOffers,
+  markScraped,
+  markFailed
+} from "../../../../apps/sellpy-scraper/src/db/discoveredOfferQueue";
 import { loadConfig as loadMatcherConfig } from "../../../../apps/style-scoring-bot/src/config";
 import { OpenRouterClient } from "../../../../apps/style-scoring-bot/src/evaluator/openrouterClient";
 import { runEvaluation } from "../../../../apps/style-scoring-bot/src/queue/worker";
@@ -63,7 +69,7 @@ async function listActiveSearches(pool: InstanceType<typeof Pool>) {
   return result.rows.map(normalizeSearchRow);
 }
 
-async function runScraperLoop() {
+async function runDiscoveryLoop() {
   const config = loadScraperConfig();
   const { db, pool } = createDbClient(config.databaseUrl);
   const http = createHttpClient({
@@ -85,34 +91,81 @@ async function runScraperLoop() {
       for (const term of terms) {
         try {
           const discovered = await crawlSearch(http, config, term, maxPages, maxItems);
-          const limit = pLimit(config.concurrency);
 
-          await Promise.all(
-            discovered.map((offer) =>
-              limit(async () => {
+          for (const offer of discovered) {
+            await upsertDiscoveredOffer(db, {
+              searchId: search.id,
+              source: "sellpy",
+              externalId: offer.nativeExternalId ?? null,
+              searchTerm: term,
+              url: offer.url,
+              rawMetadata: (offer.metadata as Record<string, unknown>) ?? {}
+            });
+          }
+
+          console.log(`Discovery: ${discovered.length} offers found for "${term}" (search ${search.id})`);
+        } catch (error) {
+          console.error("Discovery loop error", { term, searchId: search.id, error });
+        }
+      }
+    }
+
+    await sleep(pollMs);
+  }
+}
+
+async function runOfferScraperLoop() {
+  const config = loadScraperConfig();
+  const { db, pool } = createDbClient(config.databaseUrl);
+  const http = createHttpClient({
+    userAgent: config.userAgent,
+    rateLimitRps: config.rateLimitRps
+  });
+
+  const pollMs = Number(process.env.OFFER_SCRAPER_POLL_MS ?? 60000);
+  const batchSize = Number(process.env.OFFER_SCRAPER_BATCH_SIZE ?? 20);
+
+  while (true) {
+    try {
+      const claimed = await claimPendingOffers(db, batchSize);
+
+      if (claimed.length > 0) {
+        console.log(`Offer scraper: claimed ${claimed.length} pending offers`);
+        const limit = pLimit(config.concurrency);
+
+        await Promise.all(
+          claimed.map((row) =>
+            limit(async () => {
+              try {
                 const { offer: details, images } = await crawlOffer(
                   http,
                   config,
-                  term,
-                  offer.url,
-                  offer.nativeExternalId
+                  row.searchTerm,
+                  row.url,
+                  row.externalId ?? undefined
                 );
 
                 await upsertOffer(
                   db,
                   {
                     ...details,
-                    searchId: search.id
+                    searchId: row.searchId
                   },
                   images
                 );
-              })
-            )
-          );
-        } catch (error) {
-          console.error("Scraper loop error", { term, searchId: search.id, error });
-        }
+
+                await markScraped(db, row.id);
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                await markFailed(db, row.id, message);
+                console.error("Offer scraper error", { url: row.url, error });
+              }
+            })
+          )
+        );
       }
+    } catch (error) {
+      console.error("Offer scraper loop error", error);
     }
 
     await sleep(pollMs);
@@ -158,7 +211,7 @@ async function runMatcherLoop() {
 }
 
 async function main() {
-  await Promise.all([runScraperLoop(), runMatcherLoop()]);
+  await Promise.all([runDiscoveryLoop(), runOfferScraperLoop(), runMatcherLoop()]);
 }
 
 main().catch((error) => {

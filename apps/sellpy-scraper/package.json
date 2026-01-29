@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/cli.ts",
+    "discover": "tsx src/cli-discover.ts",
+    "scrape-offers": "tsx src/cli-scrape-offers.ts",
     "build": "tsc",
     "start": "node dist/apps/sellpy-scraper/src/cli.js",
     "test": "vitest",

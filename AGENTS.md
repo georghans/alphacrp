@@ -5,17 +5,23 @@ Automate Sellpy item discovery and matching. The system scrapes Sellpy offers, s
 Reference images are uploaded to an S3-compatible bucket (Hetzner Object Storage) and stored as public URLs in the database.
 
 ## Structure
-- `apps/sellpy-web`: Next.js app with login + UI for searches, offers, matches.
-- Reference images are uploaded via `POST /api/reference-images` to S3-compatible storage and stored as URLs in `searches.example_images` (UI enforces 1–5 images).
-- `apps/sellpy-scraper`: crawls Sellpy search results and offer pages, extracts metadata + images.
+- `apps/sellpy-web`: Next.js app with login + UI for searches, offers, matches. Also runs the worker loop.
+- Reference images are uploaded via `POST /api/reference-images` to S3-compatible storage and stored as URLs in `searches.example_images` (UI enforces 1-5 images).
+- `apps/sellpy-scraper`: crawls Sellpy search results and offer pages, extracts metadata + images. Provides three CLIs: `cli.ts` (legacy all-in-one), `cli-discover.ts` (discovery only), `cli-scrape-offers.ts` (offer scraping from queue).
 - `apps/style-scoring-bot`: evaluates offers against searches using OpenRouter (Gemini 3 Flash).
 - `packages/shared-db`: shared Drizzle schema + migrations + Postgres client.
 - `docker-compose.yml`: local Postgres setup.
 
 ## Architecture (High Level)
-1) **Scrape**: `apps/sellpy-scraper` discovers offers for a search term, extracts metadata + images, and upserts into Postgres with a `search_id`.
-2) **Score**: `apps/style-scoring-bot` reads offers for a search, builds prompts from search prompt + example image URLs (bucket), calls OpenRouter, and stores decisions in `offer_search_evaluations`.
-3) **View**: `apps/sellpy-web` reads from Postgres to show searches, all offers, and matched offers.
+1) **Discover**: `apps/sellpy-scraper` discovers offer URLs for a search term via `crawlSearch()` and writes them to the `discovered_offers` queue table with `status = 'pending'`.
+2) **Scrape**: A separate stage reads pending rows from `discovered_offers`, runs `crawlOffer()` to extract metadata + images, upserts into the `offers` table, and marks the queue row as `scraped` (or `failed` after 3 retries).
+3) **Score**: `apps/style-scoring-bot` reads offers for a search, builds prompts from search prompt + example image URLs (bucket), calls OpenRouter, and stores decisions in `offer_search_evaluations`.
+4) **View**: `apps/sellpy-web` reads from Postgres to show searches, all offers, and matched offers.
+
+The worker loop (`apps/sellpy-web/src/worker/loop.ts`) runs three concurrent loops:
+- **Discovery loop**: polls active searches, runs `crawlSearch()`, writes to `discovered_offers`.
+- **Offer scraper loop**: claims pending `discovered_offers` rows, runs `crawlOffer()` + `upsertOffer()`, updates status.
+- **Matcher loop**: evaluates unevaluated offers against search prompts using OpenRouter.
 
 ## Technologies
 - TypeScript, Node.js (ESM)
@@ -42,7 +48,12 @@ Reference images are uploaded to an S3-compatible bucket (Hetzner Object Storage
   - `docker compose --env-file deploy/.env.prod.local -f deploy/docker-compose.prod.local.yml run --rm migrate`
 
 ### Scraper
-- Run: `cd apps/sellpy-scraper && npm run dev -- --term "jacket" --max-items 20 --max-pages 2 --search-id <searchId>`
+- **Discovery only** (writes to `discovered_offers` queue):
+  `cd apps/sellpy-scraper && npm run discover -- -t "jacket" --max-items 20 --max-pages 2 --search-id <searchId>`
+- **Scrape pending offers** (reads from `discovered_offers`, writes to `offers`):
+  `cd apps/sellpy-scraper && npm run scrape-offers -- --batch-size 20`
+- **Legacy all-in-one** (discover + scrape in one pass):
+  `cd apps/sellpy-scraper && npm run dev -- -t "jacket" --max-items 20 --max-pages 2 --search-id <searchId>`
 
 ### Matcher
 - Run (limit offers): `cd apps/style-scoring-bot && npm run dev -- eval --search <searchId> --max-offers 10 --batch-size 5 --concurrency 2`
@@ -96,43 +107,41 @@ Reference images are uploaded to an S3-compatible bucket (Hetzner Object Storage
 - During early development it is acceptable to wipe the database before each run.
 - It is also acceptable to wipe the database to apply clean migrations.
 
-## Architecture (High Level)
-1) **Scrape**: `apps/sellpy-scraper` discovers offers for a search term, extracts metadata + ordered images, and upserts into the shared PostgreSQL database.
-2) **Score**: `apps/style-scoring-bot` reads offers (and images) from the same PostgreSQL database, builds prompts from style profiles + example images, calls OpenRouter, and stores match decisions and scores.
-
-The two apps are decoupled and run independently; data flow is via the shared database schema.
-
 ## Subprojects
 
 ### apps/sellpy-scraper
 - **Purpose**: Discover and normalize Sellpy offers and images for a given search term.
-- **Entry point**: `apps/sellpy-scraper/src/cli.ts`
+- **Entry points**:
+  - `src/cli.ts` -- legacy all-in-one (discover + scrape in one pass)
+  - `src/cli-discover.ts` -- discovery only, writes to `discovered_offers` queue
+  - `src/cli-scrape-offers.ts` -- scrapes pending offers from `discovered_offers` queue
 - **Key modules**:
-  - Crawlers: `apps/sellpy-scraper/src/crawler/searchCrawler.ts`, `apps/sellpy-scraper/src/crawler/offerCrawler.ts`
-  - Extractors: `apps/sellpy-scraper/src/extract/*`
-  - DB: `apps/sellpy-scraper/src/db/*` (uses shared Drizzle schema + migrations)
-  - Utilities: `apps/sellpy-scraper/src/utils/*` (rate limit, retry, logging, http, hashing)
+  - Crawlers: `src/crawler/searchCrawler.ts`, `src/crawler/offerCrawler.ts`
+  - Extractors: `src/extract/*`
+  - DB: `src/db/*` -- `upsertOffer.ts`, `upsertDiscoveredOffer.ts`, `discoveredOfferQueue.ts`, `resolveSearchId.ts`
+  - Utilities: `src/utils/*` (rate limit, retry, logging, http, hashing)
 - **Database**: PostgreSQL via shared Drizzle schema
 
 ### apps/style-scoring-bot
 - **Purpose**: Score offers against style profiles and record model decisions.
-- **Entry point**: `apps/style-scoring-bot/src/cli.ts`
+- **Entry point**: `src/cli.ts`
 - **Key modules**:
-  - Evaluator: `apps/style-scoring-bot/src/evaluator/*` (prompt construction + OpenRouter client)
-  - Profiles: `apps/style-scoring-bot/src/styles/profiles.ts`
-  - DB: `apps/style-scoring-bot/src/db/*` (uses shared Drizzle schema + migrations)
-  - Utilities: `apps/style-scoring-bot/src/utils/*` (rate limit, retry, logging, image cache)
+  - Evaluator: `src/evaluator/*` (prompt construction + OpenRouter client)
+  - Profiles: `src/styles/profiles.ts`
+  - DB: `src/db/*` (uses shared Drizzle schema + migrations)
+  - Utilities: `src/utils/*` (rate limit, retry, logging, image cache)
 - **Database**: PostgreSQL via shared Drizzle schema
 - **Model API**: OpenRouter (Gemini 3 Flash model slug configured via env)
 
-## Technologies Used
-- **Language/Runtime**: TypeScript, Node.js (ESM)
-- **Scraping**: Playwright (fallback for JS-rendered pages), Cheerio (HTML parsing)
-- **DB (shared)**: PostgreSQL, Drizzle ORM
-- **CLI**: Commander, tsx
-- **Validation/Config**: Zod, dotenv
-- **Logging/infra**: pino, rate limiting + retry helpers
+### apps/sellpy-web
+- **Purpose**: Next.js UI for managing searches, viewing offers/matches. Also hosts the worker loop.
+- **Worker loop** (`src/worker/loop.ts`): runs three concurrent loops -- discovery, offer scraping, and matching.
+
+### packages/shared-db
+- **Purpose**: Shared Drizzle schema, migrations, and Postgres client.
+- **Tables**: `searches`, `offers`, `offer_images`, `discovered_offers`, `offer_search_evaluations`
 
 ## What The Apps Do (Concise)
-- **apps/sellpy-scraper**: Given a search term, it crawls Sellpy, extracts offer metadata + images, and stores/upserts the results in the shared PostgreSQL database.
-- **apps/style-scoring-bot**: Given a style profile (prompt + example image URLs), it evaluates offers in the shared database with a multimodal model, producing MATCH/NO_MATCH decisions and scores for later filtering or alerting.
+- **apps/sellpy-scraper**: Given a search term, discovers offer URLs (discovery stage) and scrapes offer metadata + images (scraping stage), connected by the `discovered_offers` queue table.
+- **apps/style-scoring-bot**: Given a style profile (prompt + example image URLs), evaluates offers with a multimodal model, producing MATCH/NO_MATCH decisions and scores.
+- **apps/sellpy-web**: UI + worker. The worker runs discovery, offer scraping, and matching loops continuously.

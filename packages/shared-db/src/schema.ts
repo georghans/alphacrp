@@ -91,6 +91,36 @@ export const offerImages = pgTable(
   })
 );
 
+export const discoveredOffers = pgTable(
+  "discovered_offers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    searchId: uuid("search_id")
+      .notNull()
+      .references(() => searches.id, { onDelete: "cascade" }),
+    source: text("source").notNull().default("sellpy"),
+    externalId: text("external_id"),
+    searchTerm: text("search_term").notNull(),
+    url: text("url").notNull(),
+    status: text("status").notNull().default("pending"),
+    rawMetadata: jsonb("raw_metadata").notNull().default({}),
+    discoveredAt: timestamp("discovered_at").notNull().defaultNow(),
+    scrapedAt: timestamp("scraped_at"),
+    errorMessage: text("error_message"),
+    retryCount: integer("retry_count").notNull().default(0)
+  },
+  (table) => ({
+    uniqueSourceUrlSearch: uniqueIndex("discovered_offers_source_url_search_unique").on(
+      table.source,
+      table.url,
+      table.searchId
+    ),
+    statusIdx: index("discovered_offers_status_idx").on(table.status),
+    searchIdIdx: index("discovered_offers_search_id_idx").on(table.searchId),
+    discoveredAtIdx: index("discovered_offers_discovered_at_idx").on(table.discoveredAt)
+  })
+);
+
 export const offerSearchEvaluations = pgTable(
   "offer_search_evaluations",
   {

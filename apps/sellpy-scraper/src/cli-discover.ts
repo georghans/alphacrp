@@ -1,19 +1,17 @@
 import { Command } from "commander";
-import pLimit from "p-limit";
 import { loadConfig } from "./config.js";
 import { createHttpClient } from "./utils/http.js";
 import { logger } from "./utils/logger.js";
 import { crawlSearch } from "./crawler/searchCrawler.js";
-import { crawlOffer } from "./crawler/offerCrawler.js";
 import { createDbClient } from "./db/client.js";
-import { upsertOffer } from "./db/upsertOffer.js";
 import { resolveSearchId } from "./db/resolveSearchId.js";
+import { upsertDiscoveredOffer } from "./db/upsertDiscoveredOffer.js";
 
 const program = new Command();
 
 program
-  .name("sellpy-scraper")
-  .description("Scrape Sellpy offers into PostgreSQL")
+  .name("sellpy-discover")
+  .description("Discover Sellpy offer URLs and queue them for scraping")
   .requiredOption("-t, --term <term>", "Search term")
   .option("--search-id <id>", "Search ID to attach offers to")
   .option("--max-pages <number>", "Maximum pages to crawl", (v) => Number(v))
@@ -46,7 +44,7 @@ async function main() {
   const { db, pool } = createDbClient(config.databaseUrl);
   const searchId = await resolveSearchId(db, options.term, options.searchId);
 
-  logger.info({ term: options.term, searchId }, "Starting search crawl");
+  logger.info({ term: options.term, searchId }, "Starting discovery crawl");
   const searchOffers = await crawlSearch(
     http,
     config,
@@ -55,57 +53,34 @@ async function main() {
     config.maxItems
   );
 
-  logger.info({ count: searchOffers.length }, "Discovered offers");
+  logger.info({ count: searchOffers.length }, "Crawl returned offers");
 
-  const limit = pLimit(config.concurrency);
+  let newCount = 0;
+  let existingCount = 0;
 
-  let processed = 0;
-  let inserted = 0;
-  let updated = 0;
-  let errors = 0;
+  for (const offer of searchOffers) {
+    const result = await upsertDiscoveredOffer(db, {
+      searchId,
+      source: "sellpy",
+      externalId: offer.nativeExternalId ?? null,
+      searchTerm: options.term,
+      url: offer.url,
+      rawMetadata: (offer.metadata as Record<string, unknown>) ?? {}
+    });
 
-  await Promise.all(
-    searchOffers.map((offer) =>
-      limit(async () => {
-        try {
-          const { offer: details, images } = await crawlOffer(
-            http,
-            config,
-            options.term,
-            offer.url,
-            offer.nativeExternalId
-          );
-
-          const result = await upsertOffer(
-            db,
-            {
-              ...details,
-              searchId
-            },
-            images
-          );
-          if (result.isNew) inserted += 1;
-          else updated += 1;
-          processed += 1;
-        } catch (error) {
-          errors += 1;
-          logger.error({ error, url: offer.url }, "Failed to crawl offer");
-        }
-      })
-    )
-  );
+    if (result.isNew) newCount += 1;
+    else existingCount += 1;
+  }
 
   await pool.end();
 
   logger.info(
     {
       discovered: searchOffers.length,
-      processed,
-      inserted,
-      updated,
-      errors
+      new: newCount,
+      existing: existingCount
     },
-    "Scrape summary"
+    "Discovery summary"
   );
 }
 
