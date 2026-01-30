@@ -77,9 +77,9 @@ async function runDiscoveryLoop() {
     rateLimitRps: config.rateLimitRps
   });
 
-  const pollMs = Number(process.env.SCRAPER_POLL_MS ?? 120000);
-  const maxPages = Number(process.env.SCRAPER_MAX_PAGES ?? config.maxPages);
-  const maxItems = Number(process.env.SCRAPER_MAX_ITEMS ?? config.maxItems);
+  const pollMs = Number(process.env.SCRAPER_POLL_MS || 120000);
+  const maxPages = process.env.SCRAPER_MAX_PAGES ? Number(process.env.SCRAPER_MAX_PAGES) : config.maxPages;
+  const maxItems = process.env.SCRAPER_MAX_ITEMS ? Number(process.env.SCRAPER_MAX_ITEMS) : config.maxItems;
 
   while (true) {
     const activeSearches = await listActiveSearches(pool);
