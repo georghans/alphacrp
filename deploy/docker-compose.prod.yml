@@ -1,22 +1,4 @@
 services:
-  postgres:
-    image: postgres:16
-    container_name: sellpy-postgres
-    restart: unless-stopped
-    logging:
-      driver: local
-      options:
-        max-size: "50m"
-        max-file: "5"
-    env_file:
-      - ./.env.prod
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - sellpy_pg_data:/var/lib/postgresql/data
-
   web:
     image: ghcr.io/georghans/alphacrp-web:latest
     restart: unless-stopped
@@ -27,8 +9,6 @@ services:
         max-file: "5"
     env_file:
       - ./.env.prod
-    depends_on:
-      - postgres
     expose:
       - "3000"
 
@@ -44,8 +24,6 @@ services:
       - ./.env.prod
     volumes:
       - worker_data:/data
-    depends_on:
-      - postgres
 
   migrate:
     image: ghcr.io/georghans/alphacrp-worker:latest
@@ -53,8 +31,6 @@ services:
       - migrate
     env_file:
       - ./.env.prod
-    depends_on:
-      - postgres
     working_dir: /app/apps/sellpy-scraper
     command: ["npm", "run", "migrate"]
     logging:
@@ -85,7 +61,6 @@ services:
       - web
 
 volumes:
-  sellpy_pg_data:
   worker_data:
   caddy_data:
   caddy_config:
