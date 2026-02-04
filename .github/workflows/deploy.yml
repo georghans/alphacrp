@@ -111,6 +111,13 @@ jobs:
             MATCHER_MIN_SCORE=0.7
             MATCHER_STRICTNESS=medium
             MATCHER_CONCURRENCY=5
+            GRAFANA_LOKI_URL=${{ secrets.GRAFANA_LOKI_URL }}
+            GRAFANA_LOKI_USERNAME=${{ secrets.GRAFANA_LOKI_USERNAME }}
+            GRAFANA_PROMETHEUS_URL=${{ secrets.GRAFANA_PROMETHEUS_URL }}
+            GRAFANA_PROMETHEUS_USERNAME=${{ secrets.GRAFANA_PROMETHEUS_USERNAME }}
+            GRAFANA_LOKI_API_KEY=${{ secrets.GRAFANA_LOKI_API_KEY }}
+            GRAFANA_PROMETHEUS_API_KEY=${{ secrets.GRAFANA_PROMETHEUS_API_KEY }}
+            HOSTNAME=${{ secrets.HOSTNAME }}
             EOF
             cd /opt/alphacrp/deploy
             docker compose --env-file .env.prod -f docker-compose.prod.yml pull
